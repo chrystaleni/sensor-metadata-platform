@@ -32,7 +32,29 @@ The system follows a three-tier modular monolith architecture: a React/Vite fron
 
 ## Development status
 
-Initial setup. The Django backend currently provides a health endpoint; metadata management and frontend functionality are not yet implemented.
+Initial setup. The Django backend provides a health endpoint, and the React frontend is initialized. Metadata management functionality is not yet implemented.
+
+## Frontend development
+
+Run these commands from the `frontend/` directory. Install dependencies and start the development server:
+
+```sh
+npm install
+npm run dev
+```
+
+Run the frontend tests and lint check:
+
+```sh
+npm test -- --run
+npm run lint
+```
+
+Create a production build with:
+
+```sh
+npm run build
+```
 
 ## Backend development
 

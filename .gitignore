@@ -12,6 +12,7 @@ __pycache__/
 node_modules/
 dist/
 build/
+.vitest/
 
 # Environment files and secrets
 .env
