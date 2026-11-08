@@ -81,3 +81,7 @@ pytest
 ```
 
 The unauthenticated `GET /health/` endpoint returns HTTP 200 with `{"status": "ok"}`.
+
+## Continuous integration
+
+GitHub Actions runs automated checks on every branch push, on pull requests targeting `main`, and when manually started with `workflow_dispatch`. The backend job installs `backend/requirements.txt`, runs Django's system check, and runs pytest. The frontend job installs from `frontend/package-lock.json`, then runs the test suite, ESLint, and a production build. Team members can view workflow runs in the repository's **Actions** tab or check results on a pull request.
