@@ -1,8 +1,13 @@
 """Django settings for local development."""
 
 import os
+from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
+from dotenv import load_dotenv
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+load_dotenv(REPOSITORY_ROOT / ".env", override=False)
 
 SECRET_KEY = os.environ.get(
     "DJANGO_SECRET_KEY",
@@ -16,7 +21,7 @@ DEBUG = os.environ.get("DJANGO_DEBUG", "True").strip().lower() in {
 }
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
 
-DATABASE_ENGINE = os.environ.get("DJANGO_DATABASE_ENGINE", "sqlite").strip().lower()
+DATABASE_ENGINE = os.environ.get("DJANGO_DATABASE_ENGINE", "postgis").strip().lower()
 USE_POSTGIS = DATABASE_ENGINE in {"postgis", "postgres", "postgresql"}
 if DATABASE_ENGINE not in {"sqlite", "postgis", "postgres", "postgresql"}:
     raise ImproperlyConfigured(
@@ -99,6 +104,7 @@ elif DATABASE_ENGINE in {"postgis", "postgres", "postgresql"}:
             "PASSWORD": os.environ["POSTGRES_PASSWORD"],
             "HOST": os.environ["POSTGRES_HOST"],
             "PORT": os.environ["POSTGRES_PORT"],
+            "TEST": {"TEMPLATE": "template_postgis"},
         }
     }
 
