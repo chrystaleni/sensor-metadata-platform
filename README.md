@@ -11,14 +11,18 @@ The Sensor Metadata Management Platform is a modular monolith for managing senso
 ## Technology stack
 
 - Frontend: React and Vite
-- Backend: FastAPI
+- Backend: Django and Django REST Framework
 - Database: PostgreSQL with PostGIS
+- Spatial functionality: GeoDjango
 - Development environment: Docker Compose
-- Automated testing: GitHub Actions
+- Automated testing: pytest
+- CI: GitHub Actions
+
+The backend framework was changed from FastAPI to Django following a client request from KIOS CoE. Django REST Framework is the team's implementation choice for providing REST APIs to the React frontend.
 
 ## Architecture
 
-The system follows a three-tier modular monolith architecture: a React/Vite frontend, a FastAPI backend organized around the three problem domains, and a PostgreSQL/PostGIS data tier. The tiers are developed and run together as one application system.
+The system follows a three-tier modular monolith architecture: a React/Vite frontend, a Django backend organized around the three problem domains, and a PostgreSQL/PostGIS data tier. GeoDjango will support spatial functionality. The tiers are developed and run together as one application system.
 
 ## Team responsibilities
 
@@ -28,4 +32,30 @@ The system follows a three-tier modular monolith architecture: a React/Vite fron
 
 ## Development status
 
-Initial setup. Frameworks and application functionality have not yet been initialized.
+Initial setup. The Django backend currently provides a health endpoint; metadata management and frontend functionality are not yet implemented.
+
+## Backend development
+
+Run these commands from the `backend/` directory.
+
+Create and activate a virtual environment, then install the backend dependencies:
+
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
+
+Start the Django development server:
+
+```sh
+python manage.py runserver
+```
+
+Run the backend tests with pytest:
+
+```sh
+pytest
+```
+
+The unauthenticated `GET /health/` endpoint returns HTTP 200 with `{"status": "ok"}`.
