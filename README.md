@@ -82,6 +82,51 @@ pytest
 
 The unauthenticated `GET /health/` endpoint returns HTTP 200 with `{"status": "ok"}`.
 
+### PostgreSQL/PostGIS development database
+
+The database runs as a separate Docker Compose service. The example credentials and Django settings below are for local development only.
+
+From the repository root, copy the example environment file and start the database:
+
+```sh
+cp .env.example .env
+docker compose up -d db
+docker compose ps
+```
+
+Wait until the `db` service reports `healthy`. You can check it directly with:
+
+```sh
+docker compose exec db sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "SELECT PostGIS_Full_Version();"'
+```
+
+To connect Django, set `DJANGO_DATABASE_ENGINE=postgis` in `.env`, then load the variables into your shell from the repository root:
+
+```sh
+set -a
+source .env
+set +a
+```
+
+When running Django in PostGIS mode directly on your computer, GeoDjango also needs GDAL, GEOS, and PROJ installed on the host. On macOS, install them with `brew install gdal geos proj`; on Debian/Ubuntu, use `sudo apt-get install binutils libproj-dev gdal-bin libgdal-dev libgeos-dev`. SQLite mode and its tests do not need these system libraries.
+
+Run migrations from `backend/` after activating the backend virtual environment:
+
+```sh
+cd backend
+python manage.py check
+python manage.py migrate
+```
+
+Stop the database while keeping its data with `docker compose stop db` or `docker compose down`. To intentionally delete its stored data, run `docker compose down --volumes` from the repository root.
+
+The backend defaults to SQLite, so existing tests need no Docker service. To explicitly select SQLite and run them from `backend/`:
+
+```sh
+DJANGO_DATABASE_ENGINE=sqlite python -m pytest -v
+```
+
 ## Continuous integration
 
 GitHub Actions runs automated checks on every branch push, on pull requests targeting `main`, and when manually started with `workflow_dispatch`. The backend job installs `backend/requirements.txt`, runs Django's system check, and runs pytest. The frontend job installs from `frontend/package-lock.json`, then runs the test suite, ESLint, and a production build. Team members can view workflow runs in the repository's **Actions** tab or check results on a pull request.
