@@ -8,7 +8,7 @@ from rest_framework.exceptions import APIException, PermissionDenied
 from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
 
 from .access import get_access_policy
-from .filters import MetadataFilter, MetadataPagination, StableOrderingFilter
+from .filters import MetadataFilter, MetadataPagination, NetworkElementSearchFilter, StableOrderingFilter
 from .models import ExternalIdentifier
 from .serializers import (
     DepartmentSelectionSerializer,
@@ -189,6 +189,7 @@ class PhysicalDeviceViewSet(OperationalViewSet):
 
 class NetworkElementViewSet(OperationalViewSet):
     serializer_class = NetworkElementSerializer
+    filter_backends = (MetadataFilter, NetworkElementSearchFilter, StableOrderingFilter)
     id_filters = ("department", "element_type")
     search_fields = (*OperationalViewSet.search_fields, "element_type__name", "dma_model_id", "strategic_model_id")
     dependent_relations = ("measurements",)

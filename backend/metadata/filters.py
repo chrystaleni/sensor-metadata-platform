@@ -1,8 +1,10 @@
 from django.contrib.gis.geos import Polygon
+from django.db.models import Exists, OuterRef, Q
 from rest_framework import filters, serializers
 from rest_framework.pagination import PageNumberPagination
 
 from .serializers import MAX_ID
+from .models import ExternalIdentifier
 
 
 class MetadataPagination(PageNumberPagination):
@@ -17,6 +19,22 @@ class StableOrderingFilter(filters.OrderingFilter):
         if "id" in ordering or "-id" in ordering:
             return ordering
         return (*ordering, "id")
+
+
+class NetworkElementSearchFilter(filters.SearchFilter):
+    """Search active identifiers without duplicating or widening scoped rows."""
+
+    def filter_queryset(self, request, queryset, view):
+        search_fields = self.get_search_fields(view, request)
+        for term in self.get_search_terms(request):
+            identifiers = ExternalIdentifier.objects.active().filter(
+                network_element_id=OuterRef("pk"),
+            ).filter(Q(source__icontains=term) | Q(value__icontains=term))
+            matches = Q(Exists(identifiers))
+            for field in search_fields:
+                matches |= Q(**{self.construct_search(field, queryset): term})
+            queryset = queryset.filter(matches)
+        return queryset
 
 
 class MetadataFilter(filters.BaseFilterBackend):

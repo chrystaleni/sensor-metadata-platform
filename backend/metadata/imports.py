@@ -201,9 +201,16 @@ def import_workbook(records, context):
                 errors.append(row_error(sheet, row_number, {**serializer.errors, **problems}))
                 continue
 
-            instance = serializer.save(
-                department_id=department_id, created_by=context["request"].user, updated_by=context["request"].user,
-            )
+            try:
+                with transaction.atomic():
+                    instance = serializer.save(
+                        department_id=department_id,
+                        created_by=context["request"].user,
+                        updated_by=context["request"].user,
+                    )
+            except serializers.ValidationError as error:
+                errors.append(row_error(sheet, row_number, error.detail))
+                continue
             if ref is not None:
                 references[sheet][ref] = instance.pk
             counts[sheet] += 1

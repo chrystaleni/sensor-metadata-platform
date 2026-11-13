@@ -130,7 +130,7 @@ class ExternalIdentifier(MetadataRecord):
     class Meta(MetadataRecord.Meta):
         constraints = [
             models.UniqueConstraint(
-                fields=("network_element", "source", "value"),
+                fields=("source", "value"),
                 condition=models.Q(deleted_at__isnull=True),
                 name="meta_active_external_identifier",
             ),

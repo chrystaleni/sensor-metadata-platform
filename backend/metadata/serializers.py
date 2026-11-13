@@ -1,5 +1,6 @@
 from django.contrib.gis.geos import GEOSException, LineString, Point, Polygon
-from django.db.models import Value
+from django.db import IntegrityError, transaction
+from django.db.models import Q, Value
 from django.db.models.functions import Lower
 from rest_framework import serializers
 from rest_framework.utils import json
@@ -214,6 +215,9 @@ class ExternalIdentifierSerializer(serializers.ModelSerializer):
     class Meta:
         model = ExternalIdentifier
         fields = ("id", "source", "value")
+        # The parent validates the complete replacement list and excludes its
+        # existing identifiers, so retaining an unchanged pair remains valid.
+        validators = []
 
 
 class NetworkElementSerializer(OperationalSerializer):
@@ -233,6 +237,17 @@ class NetworkElementSerializer(OperationalSerializer):
         pairs = {(item["source"], item["value"]) for item in identifiers}
         if len(pairs) != len(identifiers):
             raise serializers.ValidationError("Each source and value pair must be unique.")
+        if pairs:
+            matching = Q()
+            for source, value in pairs:
+                matching |= Q(source=source, value=value)
+            existing = ExternalIdentifier.objects.active().filter(matching)
+            if self.instance is not None:
+                existing = existing.exclude(network_element_id=self.instance.pk)
+            if existing.exists():
+                raise serializers.ValidationError(
+                    "An active identifier with this source and value already exists."
+                )
         return identifiers
 
     def create(self, validated_data):
@@ -265,7 +280,18 @@ class NetworkElementSerializer(OperationalSerializer):
             for pair, item in incoming.items()
             if pair not in existing
         ]
-        ExternalIdentifier.objects.bulk_create(additions)
+        try:
+            with transaction.atomic():
+                ExternalIdentifier.objects.bulk_create(additions)
+        except IntegrityError as error:
+            # Another Department can claim a pair after validation. Preserve
+            # the database guarantee and return a field error for that race.
+            diagnostic = getattr(error.__cause__, "diag", None)
+            if getattr(diagnostic, "constraint_name", None) != "meta_active_external_identifier":
+                raise
+            raise serializers.ValidationError({
+                "external_identifiers": ["An active identifier with this source and value already exists."]
+            }) from error
 
 
 class MeasurementSerializer(OperationalSerializer):
