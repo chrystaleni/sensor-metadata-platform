@@ -37,6 +37,8 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "core",
+    "local_departments",
+    "metadata",
 ]
 
 if USE_POSTGIS:
@@ -117,3 +119,15 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Department and access adapters are supplied by the shared security layer.
+METADATA_DEPARTMENT_MODEL = os.environ.get("METADATA_DEPARTMENT_MODEL", "local_departments.Department")
+METADATA_PLATFORM_DEPARTMENT_ID = int(os.environ.get("METADATA_PLATFORM_DEPARTMENT_ID", "1"))
+METADATA_ACCESS_POLICY = os.environ.get("METADATA_ACCESS_POLICY", "metadata.access.NoAccessPolicy")
+GDAL_LIBRARY_PATH = os.environ.get("GDAL_LIBRARY_PATH")
+GEOS_LIBRARY_PATH = os.environ.get("GEOS_LIBRARY_PATH")
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.SessionAuthentication"],
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+}
