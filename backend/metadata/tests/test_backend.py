@@ -1,12 +1,15 @@
 from concurrent.futures import ThreadPoolExecutor
-from io import BytesIO
+from io import BytesIO, StringIO
 from queue import Queue
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from time import monotonic, sleep
 
 import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.gis.geos import MultiPoint, Point
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
 from django.db import IntegrityError, connection, connections, transaction
 from django.db.models.deletion import ProtectedError
 from django.test import override_settings
@@ -360,6 +363,66 @@ class MetadataAPITests(APITestCase):
         self.assertEqual(self.client.get(f"{API}physical-devices/?device_type=0").status_code, 400)
         self.assertEqual(self.client.get(f"{API}physical-devices/?device_type=999").json()["count"], 0)
 
+    def test_identifiers_are_unique_per_external_system_across_elements(self):
+        first = self.post("network-elements", {
+            "department": 2, "name": "First", "element_type": self.catalog["element_type"],
+            "external_identifiers": [{"source": "ERP", "value": "asset-101"}],
+        })
+        self.assertEqual(first.status_code, 201, first.data)
+        self.client.force_authenticate(self.multi)
+        duplicate = self.post("network-elements", {
+            "department": 3, "name": "Duplicate", "element_type": self.catalog["element_type"],
+            "external_identifiers": [{"source": "ERP", "value": "asset-101"}],
+        })
+        self.assertEqual(duplicate.status_code, 400, duplicate.data)
+        self.assertIn("external_identifiers", duplicate.data)
+        self.assertFalse(NetworkElement.objects.filter(name="Duplicate").exists())
+        distinct_system = self.post("network-elements", {
+            "department": 3, "name": "Different system", "element_type": self.catalog["element_type"],
+            "external_identifiers": [{"source": "SCADA", "value": "asset-101"}],
+        })
+        self.assertEqual(distinct_system.status_code, 201, distinct_system.data)
+
+    def test_database_rejects_duplicate_active_external_identifiers(self):
+        first, second = self.element(name="First"), self.element(name="Second")
+        ExternalIdentifier.objects.create(network_element=first, source="ERP", value="asset-101")
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            ExternalIdentifier.objects.create(network_element=second, source="ERP", value="asset-101")
+
+    def test_archived_identifiers_remain_stored_and_can_be_reused(self):
+        first = self.element(name="Old")
+        identifier = ExternalIdentifier.objects.create(network_element=first, source="ERP", value="asset-101")
+        self.assertEqual(self.client.delete(self.detail("network-elements", first.pk)).status_code, 204)
+        replacement = self.post("network-elements", {
+            "department": 2, "name": "Replacement", "element_type": self.catalog["element_type"],
+            "external_identifiers": [{"source": "ERP", "value": "asset-101"}],
+        })
+        self.assertEqual(replacement.status_code, 201, replacement.data)
+        identifier.refresh_from_db()
+        self.assertIsNotNone(identifier.deleted_at)
+        self.assertEqual(identifier.network_element_id, first.pk)
+        self.assertNotEqual(replacement.data["external_identifiers"][0]["id"], identifier.pk)
+
+    def test_identifier_search_uses_active_values_and_keeps_department_scope(self):
+        first = self.element(name="Visible station")
+        second = self.element(name="Other station")
+        hidden = self.element(department=3, name="Hidden station")
+        for element, source, value in (
+            (first, "ERP", "ACTIVE-101"), (first, "SCADA", "ACTIVE-102"),
+            (second, "GIS", "ACTIVE-103"), (hidden, "ERP", "ACTIVE-HIDDEN"),
+        ):
+            ExternalIdentifier.objects.create(network_element=element, source=source, value=value)
+        retired = ExternalIdentifier.objects.create(network_element=first, source="OLD", value="RETIRED-101")
+        ExternalIdentifier.objects.filter(pk=retired.pk).archive(self.editor)
+        self.assertEqual(self.client.get(f"{API}network-elements/?search=RETIRED-101").json()["count"], 0)
+        combined = self.client.get(f"{API}network-elements/?search=Visible%20ACTIVE-101").json()
+        self.assertEqual([row["id"] for row in combined["results"]], [first.pk])
+        self.assertEqual(self.client.get(f"{API}network-elements/?search=ERP").json()["count"], 1)
+        page = self.client.get(f"{API}network-elements/?search=ACTIVE&ordering=id&page_size=1").json()
+        self.assertEqual(page["count"], 2)
+        self.assertEqual(page["results"][0]["id"], first.pk)
+        self.assertEqual(self.client.get(page["next"]).json()["results"][0]["id"], second.pk)
+
     def test_import_links_all_sheets_and_api_can_read_result(self):
         response = self.upload(self.workbook_sheets())
         self.assertEqual(response.status_code, 201, response.data)
@@ -371,6 +434,21 @@ class MetadataAPITests(APITestCase):
         self.assertEqual(result["physical_device"], measurement.physical_device_id)
         self.assertEqual(result["network_element"], measurement.network_element_id)
 
+    def test_generated_example_workbook_imports_all_three_domains(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "example.xlsx"
+            call_command("metadata_workbook", str(path), example=True, stdout=StringIO())
+            response = self.client.post(
+                f"{API}imports/excel/",
+                {"department": 2, "file": SimpleUploadedFile(path.name, path.read_bytes())},
+                format="multipart",
+            )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["created"], {"Physical Devices": 1, "Network Elements": 1, "Measurements": 1})
+        measurement = Measurement.objects.get()
+        self.assertEqual(measurement.physical_device.name, "Example station")
+        self.assertEqual(measurement.network_element.external_identifiers.get().value, "SITE-101")
+
     def test_import_invalid_late_row_rolls_back_all_changes(self):
         sheets = self.workbook_sheets()
         sheets["Measurements"].append(("Invalid", "@station", "@site", 999, self.catalog["measurement_unit"]))
@@ -379,6 +457,20 @@ class MetadataAPITests(APITestCase):
         self.assertEqual(response.json()["errors"][0]["sheet"], "Measurements")
         self.assertEqual(response.json()["errors"][0]["row"], 3)
         self.assertIn("measurement_type", response.json()["errors"][0]["errors"])
+        for model in (PhysicalDevice, NetworkElement, ExternalIdentifier, Measurement):
+            self.assertFalse(model.objects.exists())
+
+    def test_import_duplicate_identifiers_reports_row_and_rolls_back(self):
+        sheets = self.workbook_sheets()
+        sheets["Network Elements"].append((
+            "duplicate", "Duplicate site", self.catalog["element_type"],
+            '[{"source":"KIOS","value":"SITE-101"}]',
+        ))
+        response = self.upload(sheets)
+        self.assertEqual(response.status_code, 400, response.data)
+        error = response.data["errors"][0]
+        self.assertEqual((error["sheet"], error["row"]), ("Network Elements", 3))
+        self.assertIn("external_identifiers", error["errors"])
         for model in (PhysicalDevice, NetworkElement, ExternalIdentifier, Measurement):
             self.assertFalse(model.objects.exists())
 
@@ -572,3 +664,67 @@ class MetadataConcurrencyTests(APITransactionTestCase):
         self.assert_archive_serializes_measurement(
             f"{API}measurement-types/{self.measurement_type}/", manager, "measurement_type"
         )
+
+    def assert_identifier_race_rejected(self, *, importing):
+        self.client.force_authenticate(self.editor)
+        element_type = NetworkElementType.objects.get().pk
+        pair = {"source": "ERP", "value": "concurrent-101"}
+        pid_queue = Queue()
+        writer = get_user_model().objects.create_user(username="multi")
+
+        def create_competing_element():
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute("SELECT pg_backend_pid()")
+                    pid_queue.put(cursor.fetchone()[0])
+                client = APIClient()
+                client.force_authenticate(writer)
+                if importing:
+                    workbook = make_workbook({"Network Elements": [
+                        ("name", "element_type", "external_identifiers"),
+                        ("Concurrent", element_type, '[{"source":"ERP","value":"concurrent-101"}]'),
+                    ]})
+                    return client.post(
+                        f"{API}imports/excel/", {"department": 3, "file": workbook}, format="multipart",
+                    )
+                return client.post(f"{API}network-elements/", {
+                    "department": 3, "name": "Concurrent", "element_type": element_type,
+                    "external_identifiers": [pair],
+                }, format="json")
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=1) as worker:
+            with transaction.atomic():
+                response = self.client.post(f"{API}network-elements/", {
+                    "department": 2, "name": "Original", "element_type": element_type,
+                    "external_identifiers": [pair],
+                }, format="json")
+                self.assertEqual(response.status_code, 201, response.data)
+                pending = worker.submit(create_competing_element)
+                pid = pid_queue.get(timeout=5)
+                deadline = monotonic() + 5
+                while monotonic() < deadline and not pending.done():
+                    with connection.cursor() as cursor:
+                        cursor.execute("SELECT 1 FROM pg_locks WHERE pid = %s AND NOT granted", [pid])
+                        if cursor.fetchone():
+                            break
+                    sleep(0.02)
+                else:
+                    self.fail("The duplicate identifier did not wait for the competing transaction.")
+            response = pending.result(timeout=5)
+        self.assertEqual(response.status_code, 400, response.data)
+        if importing:
+            error = response.data["errors"][0]
+            self.assertEqual((error["sheet"], error["row"]), ("Network Elements", 2))
+            self.assertIn("external_identifiers", error["errors"])
+        else:
+            self.assertIn("external_identifiers", response.data)
+        self.assertFalse(NetworkElement.objects.filter(name="Concurrent").exists())
+        self.assertEqual(ExternalIdentifier.objects.active().filter(**pair).count(), 1)
+
+    def test_concurrent_identifier_claim_returns_api_field_error(self):
+        self.assert_identifier_race_rejected(importing=False)
+
+    def test_concurrent_identifier_claim_returns_excel_row_error(self):
+        self.assert_identifier_race_rejected(importing=True)
