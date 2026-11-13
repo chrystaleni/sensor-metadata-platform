@@ -1,0 +1,43 @@
+[
+  {
+    "model": "metadata.physicaldevicetype",
+    "pk": 1,
+    "fields": {
+      "department": 1,
+      "name": "Weather station",
+      "created_at": "2026-11-10T00:00:00Z",
+      "updated_at": "2026-11-10T00:00:00Z"
+    }
+  },
+  {
+    "model": "metadata.networkelementtype",
+    "pk": 1,
+    "fields": {
+      "department": 1,
+      "name": "Monitoring site",
+      "created_at": "2026-11-10T00:00:00Z",
+      "updated_at": "2026-11-10T00:00:00Z"
+    }
+  },
+  {
+    "model": "metadata.measurementtype",
+    "pk": 1,
+    "fields": {
+      "department": 1,
+      "name": "Air temperature",
+      "created_at": "2026-11-10T00:00:00Z",
+      "updated_at": "2026-11-10T00:00:00Z"
+    }
+  },
+  {
+    "model": "metadata.measurementunit",
+    "pk": 1,
+    "fields": {
+      "department": 1,
+      "name": "Celsius",
+      "symbol": "°C",
+      "created_at": "2026-11-10T00:00:00Z",
+      "updated_at": "2026-11-10T00:00:00Z"
+    }
+  }
+]
