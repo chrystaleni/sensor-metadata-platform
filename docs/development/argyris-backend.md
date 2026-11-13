@@ -2,7 +2,16 @@
 
 Recorded on 13 November 2026. This branch implements the backend areas of BE-01 through BE-08 against the existing Django project and PostGIS configuration.
 
-The contribution is submitted for team review. The shared Department schema and access adapter, the final API contract under ARCH-01 (#9), and the approved workbook columns require coordination before merge.
+The backend contribution is complete for review under BE-01 through BE-08. The shared Department schema and access adapter, the final API contract under ARCH-01 (#9), and workbook-column approval remain team integration decisions before merge and deployment.
+
+## Delivery contents
+
+- [API examples and import instructions](argyris-api-examples.md)
+- [Database and migration handover](argyris-database.md)
+- [Acceptance criteria and validation evidence](../testing/argyris-backend-validation.md)
+- [AI tool selection, specifications and development log](argyris-ai-development-log.md)
+
+Use the repository README to install the backend and start PostGIS. Then run `python manage.py makemigrations --check --dry-run` and `python -m pytest -v` from `backend/`. An authenticated session alone grants no metadata access with the default policy; the shared adapter below must supply the user's Department scope.
 
 ## Implemented behavior
 
@@ -37,7 +46,7 @@ List parameters include search, ordering, page, page_size and relationship field
 
 Controlled-list reads can include archived values using include_inactive=true. Such values are returned with is_active=false and cannot be chosen on metadata writes.
 
-Network element external_identifiers accepts objects with source and value. An update containing this list replaces the active list, preserving unchanged pairs and archiving removals. Active uniqueness is per network element, source and value. This uniqueness scope should be checked against the final Phase 2 specification.
+Network element external_identifiers accepts objects with source and value. An update containing this list replaces the active list, preserving unchanged pairs and archiving removals. Active `(source, value)` pairs are unique across Network Elements, including across Departments, as required by BE-05's external-system duplicate rule. Comparisons use exact strings. An archived pair remains in history and may be reused. Duplicate responses expose no other record or Department details. General text search includes active identifier sources and values; retired identifiers are excluded.
 
 ## Proposed workbook format
 
@@ -53,6 +62,8 @@ Geometry, external identifiers and data collection configuration use JSON text c
 
 Any invalid row rejects the entire import. A successful response returns 201 with created counts by sheet. A rejected workbook returns 400 with errors containing sheet, Excel row and field errors. Each successful upload creates a new batch. The current implementation has no automatic retry deduplication.
 
+Generate the exact implemented headers with `python manage.py metadata_workbook metadata-template.xlsx`. Add `--example` for synthetic linked rows using controlled-list IDs 1 from the optional demo fixtures. The example is intended for an empty local database, and repeat imports of its active external identifier are rejected. These files describe the implemented format for ARCH-01 review; no approval of a client workbook template is implied.
+
 ## Validation performed
 
 The integrated official project was checked with Python 3.12.14, Django 5.2.19, PostgreSQL 16.15, PostGIS 3.4.6 and GDAL 3.12.4.
@@ -60,11 +71,12 @@ The integrated official project was checked with Python 3.12.14, Django 5.2.19, 
 - Django system check reported no issues.
 - All migrations were applied to the disposable database.
 - makemigrations --check --dry-run reported no changes.
-- python -m pytest -v reported 28 passed and 9 passed subtests, including the original database and health checks.
-- Tests exercise Excel rollback, department scope, optional account/model identifiers, inactive controlled values, audit attribution and concurrent parent/catalog archival.
+- python -m pytest -v reported 36 passed and 9 passed subtests, including the original database and health checks.
+- Tests exercise Excel rollback, department scope, optional account/model identifiers, inactive controlled values, audit attribution, concurrent parent/catalog archival and concurrent identifier collisions across Departments.
+- The generated example workbook was imported through the actual API and linked all three domains successfully.
 
 Run the same checks from backend/ using the documented PostGIS environment. The existing GitHub Actions workflow also checks for missing migrations.
 
 ## AI development evidence
 
-Argyris Fellas used Codex to construct the three-domain Django backend and then inspect the actual repository and BE-01 through BE-08 acceptance criteria. Inspection identified account/model identifier fields and named collection settings to add before integration. The implementation was refined, migrated and tested in the official repository structure. The tests and results above are the observed validation evidence. Team review of the shared schema, authorization interface and final contract remains pending.
+Argyris Fellas used Codex to construct the three-domain Django backend and then inspect the actual repository and BE-01 through BE-08 acceptance criteria. Inspection identified account/model identifier fields and named collection settings to add before integration. The final audit corrected external-system identifier uniqueness and added active-identifier search, concurrent-collision handling and an executable workbook example. The implementation was refined, migrated and tested in the official repository structure. The linked development log records prompts, changes and observed validation. Team review of the shared schema, authorization interface and final contract remains pending.
