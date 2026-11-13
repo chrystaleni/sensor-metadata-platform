@@ -1,0 +1,12 @@
+[
+  {
+    "model": "local_departments.department",
+    "pk": 1,
+    "fields": {"name": "Platform"}
+  },
+  {
+    "model": "local_departments.department",
+    "pk": 2,
+    "fields": {"name": "Demo Department"}
+  }
+]
