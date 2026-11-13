@@ -32,7 +32,7 @@ The system follows a three-tier modular monolith architecture: a React/Vite fron
 
 ## Development status
 
-Initial setup. The Django backend provides a health endpoint, and the React frontend is initialized. Metadata management functionality is not yet implemented.
+The Django backend implements metadata management for Measurements, Physical Devices and Network Elements. Argyris's contribution includes shared controlled lists, PostGIS geometry, search and filtering, atomic Excel import and audited logical deletion. See the [backend handover](docs/development/argyris-backend.md) for setup, API examples, validation results and the shared security integration boundary. The React frontend is initialized; authentication, production authorization and the final frontend integration are separate team work.
 
 ## Frontend development
 
@@ -101,14 +101,7 @@ python -m pytest -v
 
 GitHub Actions starts PostgreSQL 16 with PostGIS 3.7, waits for its health check, then runs Django checks, migrations, and all backend tests against that service.
 
-For an isolated task that does not use spatial features, select SQLite explicitly:
-
-```sh
-DJANGO_DATABASE_ENGINE=sqlite python manage.py check
-DJANGO_DATABASE_ENGINE=sqlite python -m pytest -m "not postgis"
-```
-
-The PostGIS integration test asserts the configured PostGIS backend and executes `SELECT PostGIS_Version()`, so it fails if run against SQLite.
+The metadata models and migrations require PostgreSQL/PostGIS. Use the PostGIS configuration for the complete backend and test suite; SQLite does not support these spatial migrations. The integration test asserts the configured PostGIS backend and executes `SELECT PostGIS_Version()`.
 
 The unauthenticated `GET /health/` endpoint returns HTTP 200 with `{"status": "ok"}`.
 
@@ -116,4 +109,4 @@ Stop Docker without deleting the database data with `docker compose stop db` or 
 
 ## Continuous integration
 
-GitHub Actions runs automated checks on every branch push, on pull requests targeting `main`, and when manually started with `workflow_dispatch`. The backend job installs `backend/requirements.txt`, runs Django's system check, and runs pytest. The frontend job installs from `frontend/package-lock.json`, then runs the test suite, ESLint, and a production build. Team members can view workflow runs in the repository's **Actions** tab or check results on a pull request.
+GitHub Actions runs automated checks on every branch push, on pull requests targeting `main`, and when manually started with `workflow_dispatch`. The backend job installs `backend/requirements.txt`, runs Django's system check, applies migrations, checks for missing migrations and runs pytest. The frontend job installs from `frontend/package-lock.json`, then runs the test suite, ESLint, and a production build. Team members can view workflow runs in the repository's **Actions** tab or check results on a pull request.
