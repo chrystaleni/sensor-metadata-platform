@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Exists, OuterRef, Prefetch
+from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.utils import timezone
 from django.utils.functional import cached_property
 from rest_framework import filters, serializers, viewsets
@@ -113,11 +113,18 @@ class MetadataViewSet(DepartmentScope, viewsets.ModelViewSet):
 
 class OperationalViewSet(MetadataViewSet):
     def get_queryset(self):
+        scope = Q(department_id__in=self.access_policy.readable_department_ids(self.request))
         if self.is_write:
-            departments = self.access_policy.writable_department_ids(self.request)
-        else:
-            departments = self.access_policy.readable_department_ids(self.request)
-        return self.active_records().filter(department_id__in=departments)
+            scope |= Q(department_id__in=self.access_policy.writable_department_ids(self.request))
+        return self.active_records().filter(scope)
+
+    def get_object(self):
+        instance = super().get_object()
+        if self.is_write:
+            # A known, readable record with no write permission is forbidden;
+            # records outside both scopes remain hidden by the queryset.
+            self.require_writable_department(instance.department_id)
+        return instance
 
     def department_for_create(self):
         selection = DepartmentSelectionSerializer(data=self.request.data)
