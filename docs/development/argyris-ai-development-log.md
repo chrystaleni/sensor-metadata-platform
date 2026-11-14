@@ -64,6 +64,21 @@ This is a concise reconstructed specification from the user's assignment and sub
 | Changes/corrections | Removed obsolete standalone/SQLite run claims for the spatial backend, clarified authenticated access and distinguished automated verification from pending team/client acceptance. |
 | Related deliverables | README, backend handover, API/database guides, validation record and workbook generator. |
 
+## Entry 13 - Individual error documentation and regression audit
+
+| Field | Record |
+| --- | --- |
+| Team member | Argyris Fellas |
+| AI tool | Codex |
+| Date and phase | 14 November 2026; Testing and Documentation |
+| Purpose | Document and execute the implemented backend error paths individually, as requested by the assignee. |
+| Prompt summary | Check every added validation/error and test it separately, with request input, expected error/status and preservation of saved data. Inspect the existing tests first and retain them. |
+| Generated result | Stable case catalog, parametrized API/import/database/CLI tests, positive boundary/session tests, Markdown error matrix and full observed JSON responses. |
+| Use | Added 320 tests: 310 individual error cases and ten positive/boundary/session cases. Reused the existing production interfaces and synthetic access fixture; no new feature or security model was introduced. |
+| Validation/evaluation | Python 3.13.18, Django 5.2.19 and isolated PostgreSQL 16/PostGIS 3.4.6: dependency/system/migration checks passed; the complete suite passed 359 tests plus 18 subtests with zero failures. Every negative API/import/database case compares complete metadata rows; command failures preserve existing files. |
+| Changes/corrections | A corrupt DEFLATE member reproduced an uncaught zlib.error/HTTP 500. The existing XLSX unreadable-file handler now catches that exception and returns its documented 400 error. Corrected the API example to DRF 3.18's indexed object error format and documented 405/415 and import request-vs-row error shapes. |
+| Related deliverables | Error catalog and JSON observations, executable tests and JUnit evidence. GitHub CI must be observed separately after publishing; local results do not assert remote success. |
+
 ## Review boundaries
 
 Follow-up on 14 November: Codex reproduced and corrected missing nested source/value fields on PATCH, preserving stored data and unrelated PATCH semantics. Inspection of SEC-03 then identified the explicit 403/404 distinction, which was aligned in the existing operational views. The final local suite used Python 3.13.18 and passed 39 tests plus 18 subtests. The API guide, validation mapping and shared integration handover were updated using the observed code and results. These are further refinements of entries 11-12; no teammate approval or new security implementation is claimed.

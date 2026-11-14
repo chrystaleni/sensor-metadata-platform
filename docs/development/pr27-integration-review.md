@@ -2,6 +2,8 @@
 
 Reviewed by Argyris Fellas with Codex assistance, 14 November 2026. Baseline: `feature/argyris-backend-metadata`, commit `c91fcd52f63924f4c25a05b2b208ecff25028463`. This review covers the nested-identifier defect, existing test coverage, Department integration and observed validation. It does not change architecture or database models.
 
+The later individual-error audit starts from `06bd44b`. Its [error catalog](../testing/backend-error-catalog.md) documents 310 separate error cases and ten additional boundary/session tests. The complete local suite now passes **359 tests and 18 subtests**. It also reproduces and fixes corrupt XLSX DEFLATE content returning 500 instead of the existing 400 file error. The earlier results below remain the historical record of the narrower PATCH review; no shared architecture, schema, frontend or workflow was changed by this audit.
+
 ## External identifier defect and focused fix
 
 On a parent PATCH, DRF's partial flag can skip required-field validation inside a nested serializer. `NetworkElementSerializer.validate_external_identifiers()` then directly reads each item's `source` and `value`, producing a KeyError when either is absent. The regression reproduced HTTP 500 for missing source, missing value, an empty item and a mixed valid/incomplete list.

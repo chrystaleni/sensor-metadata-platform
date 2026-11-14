@@ -74,12 +74,14 @@ The final 14 November integrated project checks used Python 3.13.18, Django 5.2.
 - Django system check reported no issues.
 - All migrations were applied to the disposable database.
 - makemigrations --check --dry-run reported no changes.
-- python -m pytest -v reported 39 passed and 18 passed subtests, including the original database and health checks.
+- python -m pytest -v reported 359 passed and 18 passed subtests, including the original 39 tests and 320 added error/boundary/session tests.
 - Tests exercise Excel rollback, department scope, optional account/model identifiers, inactive controlled values, audit attribution, concurrent parent/catalog archival and concurrent identifier collisions across Departments.
 - The generated example workbook was imported through the actual API and linked all three domains successfully.
 - Read-only update/deactivation returns 403 for all three domains without changing stored data; cross-Department access still returns 404.
 
 Run the same checks from backend/ using the documented PostGIS environment. The existing GitHub Actions workflow also checks for missing migrations.
+
+The [individual error catalog](../testing/backend-error-catalog.md) documents 310 separately executable error cases with input, HTTP/error expectations and preservation assertions. The other ten new tests cover accepted boundaries, pagination fallbacks, audit fields, workbook generation and a real session/CSRF exchange. A corrupt compressed workbook regression exposed an uncaught zlib error; the existing workbook handler now returns its standard 400 file error. No model, migration, frontend or CI workflow changed in this error audit.
 
 ## AI development evidence
 

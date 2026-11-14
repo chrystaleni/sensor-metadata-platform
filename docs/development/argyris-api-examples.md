@@ -86,10 +86,10 @@ returns 200 with the updated Network Element. An illustrative response is:
 Sending `{"external_identifiers":[{"source":"ERP"}]}` returns 400:
 
 ```json
-{"external_identifiers":[{"value":["This field is required."]}]}
+{"external_identifiers":{"0":{"value":["This field is required."]}}}
 ```
 
-Missing `source` produces the corresponding `source` error. Error positions match the submitted list. An invalid item rejects the entire request: identifiers, archive/audit fields and unrelated record changes remain unchanged. A valid item elsewhere in the same list is not partially saved.
+Missing `source` produces the corresponding `source` error. DRF 3.18 encodes item positions as object keys such as `"0"`, matching the submitted list index. An invalid item rejects the entire request: identifiers, archive/audit fields and unrelated record changes remain unchanged. A valid item elsewhere in the same list is not partially saved.
 
 ## Excel workflow
 
@@ -120,13 +120,19 @@ An invalid row returns 400 and rolls back the entire workbook:
 
 File-level errors use null `sheet` and `row`. Duplicate external identifiers are rejected using the same rule as the API, including concurrent collisions. Imports create new records; there is no upsert or automatic retry deduplication. Repeating the example while its identifier is active fails and rolls back.
 
+Missing/invalid multipart fields (including an empty upload) use ordinary field-keyed 400 errors before workbook processing. Corrupt ZIP, XML or DEFLATE content returns the unreadable-workbook 400 file error. The worksheet row-position limit rejects row 2002, including blank gaps after the header.
+
 ## Error handling
 
 | Status | Meaning |
 | --- | --- |
 | 400 | Invalid field, geometry, relationship or workbook. Inspect field messages or row errors. |
 | 403 | No authenticated session, CSRF failure or insufficient write/catalog permission, including a read-only user's update/deactivation attempt. |
-| 404 | Missing, inactive or out-of-scope detail; no protected record is disclosed. |
+| 404 | Missing, inactive or out-of-scope detail, or invalid pagination page. |
+| 405 | HTTP method unsupported at the requested collection/detail URL. |
 | 409 | Active dependents prevent logical deletion. |
+| 415 | Unsupported request media type, including JSON at the multipart-only Excel endpoint. |
 
 The shared authentication owner may add authenticators that return 401 for unauthenticated requests. Frontend clients should handle the agreed authentication contract rather than rely on one authenticator's status.
+
+The [individual error catalog](../testing/backend-error-catalog.md) maps 310 error cases to executable test IDs, expected input/status/message and integrity checks. Its companion JSON records complete observed error bodies. It also documents accepted boundary inputs, pagination fallbacks, read-only audit fields and the remaining production authorization boundary.
