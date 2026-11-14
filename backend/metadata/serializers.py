@@ -212,6 +212,16 @@ class PhysicalDeviceSerializer(OperationalSerializer):
 
 
 class ExternalIdentifierSerializer(serializers.ModelSerializer):
+    def validate(self, attrs):
+        # Supplied list items are complete replacements, even on a parent PATCH.
+        missing = {
+            name: [self.fields[name].error_messages["required"]]
+            for name in ("source", "value") if name not in attrs
+        }
+        if missing:
+            raise serializers.ValidationError(missing, code="required")
+        return attrs
+
     class Meta:
         model = ExternalIdentifier
         fields = ("id", "source", "value")
