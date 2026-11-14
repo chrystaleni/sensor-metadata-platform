@@ -93,3 +93,11 @@ On 14 November the existing PR head `c91fcd5` showed **four completed successful
 These remote results belong to the baseline before this fix. The new tests/fix require approval, commit/push to the existing branch, and a new successful CI run before their CI status can be claimed. The current workflow already installs GeoDjango dependencies, starts PostgreSQL/PostGIS, applies migrations and checks migration consistency; no demonstrated configuration defect requires a workflow change. Frontend files and checks are unchanged.
 
 The local patch is ready for review. Final PR acceptance requires the focused fix to be published and pass CI, approving teammate review, and agreement on the shared Department/authorization boundary and API/workbook contract. The PR is not ready for merge while those requirements remain unresolved.
+
+## Follow-up completion on 14 November
+
+The nested-identifier fix was published in commits `cc4c0e2`, `53bc6f6` and `f143fab`. All four CI checks on `f143fab` passed; the backend reported 39 tests and 15 subtests passed.
+
+A subsequent inspection of SEC-03 (#12) identified its explicit distinction between a read-only user's insufficient permissions (403) and out-of-Department records (404). The operational views now look up readable/writable-scoped records and check write permission before update/deactivation. The existing read-only test covers all three domains and checks unchanged stored rows. It reproduced 404 instead of 403 before this refinement; the full refined local suite passed **39 tests and 18 subtests** on Python 3.13.18/PostGIS. No shared model, role system, migration or frontend change was added.
+
+Main remains at `2b07c9b`; the two other open PRs are frontend changes. No shared Department/membership/authorization implementation or approved contract is present there. The [shared integration handover](pr27-shared-integration.md) provides the exact proposed model boundary, adapter contract and acceptance checks for architecture/security-owner review. That approval cannot be represented by an automated test or by this backend contribution.

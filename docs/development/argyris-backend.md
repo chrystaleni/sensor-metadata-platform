@@ -1,6 +1,6 @@
 # Backend contribution by Argyris Fellas
 
-Recorded on 13 November 2026. This branch implements the backend areas of BE-01 through BE-08 against the existing Django project and PostGIS configuration.
+Recorded on 13 November and updated on 14 November 2026. This branch implements the backend areas of BE-01 through BE-08 against the existing Django project and PostGIS configuration.
 
 The backend contribution is complete for review under BE-01 through BE-08. The shared Department schema and access adapter, the final API contract under ARCH-01 (#9), and workbook-column approval remain team integration decisions before merge and deployment.
 
@@ -10,6 +10,7 @@ The backend contribution is complete for review under BE-01 through BE-08. The s
 - [Database and migration handover](argyris-database.md)
 - [Acceptance criteria and validation evidence](../testing/argyris-backend-validation.md)
 - [AI tool selection, specifications and development log](argyris-ai-development-log.md)
+- [Shared Department and authorization integration handover](pr27-shared-integration.md)
 
 Use the repository README to install the backend and start PostGIS. Then run `python manage.py makemigrations --check --dry-run` and `python -m pytest -v` from `backend/`. An authenticated session alone grants no metadata access with the default policy; the shared adapter below must supply the user's Department scope.
 
@@ -42,6 +43,8 @@ Requests use integer relationship IDs. The department ID is required on create a
 
 Responses include id, department, name, description, created_at, updated_at, created_by, updated_by and is_active. List responses contain count, next, previous and results. Validation errors use DRF's field-keyed messages. Authenticated users receive 403 for unauthorized creation. Out-of-scope detail records return 404.
 
+An update/deactivation of a readable record without write permission returns 403, in accordance with SEC-03. A record outside both permitted scopes remains 404. Every supplied external identifier requires source and value even during PATCH; invalid items return 400 without changing stored data. Omitting the list preserves it and an explicit empty list archives its active entries.
+
 List parameters include search, ordering, page, page_size and relationship field names. Ordering supports id, name, created_at and updated_at, with a minus sign for descending order. Page size defaults to 25 and is limited to 100. Device and network lists support bbox=west,south,east,north with increasing WGS84 coordinates. Network lists also support identifier for an exact active external identifier value.
 
 Controlled-list reads can include archived values using include_inactive=true. Such values are returned with is_active=false and cannot be chosen on metadata writes.
@@ -66,14 +69,15 @@ Generate the exact implemented headers with `python manage.py metadata_workbook 
 
 ## Validation performed
 
-The integrated official project was checked with Python 3.12.14, Django 5.2.19, PostgreSQL 16.15, PostGIS 3.4.6 and GDAL 3.12.4.
+The final 14 November integrated project checks used Python 3.13.18, Django 5.2.19, PostgreSQL 16.15, PostGIS 3.4.6 and GDAL 3.12.4.
 
 - Django system check reported no issues.
 - All migrations were applied to the disposable database.
 - makemigrations --check --dry-run reported no changes.
-- python -m pytest -v reported 36 passed and 9 passed subtests, including the original database and health checks.
+- python -m pytest -v reported 39 passed and 18 passed subtests, including the original database and health checks.
 - Tests exercise Excel rollback, department scope, optional account/model identifiers, inactive controlled values, audit attribution, concurrent parent/catalog archival and concurrent identifier collisions across Departments.
 - The generated example workbook was imported through the actual API and linked all three domains successfully.
+- Read-only update/deactivation returns 403 for all three domains without changing stored data; cross-Department access still returns 404.
 
 Run the same checks from backend/ using the documented PostGIS environment. The existing GitHub Actions workflow also checks for missing migrations.
 

@@ -8,6 +8,8 @@ The prefix is `/api/v1/`. Requests use the team's existing DRF authentication. S
 
 `department` is required on creation and fixed afterward. Only IDs in the adapter's permitted Departments can be used. The four catalog resources belong to `METADATA_PLATFORM_DEPARTMENT_ID` and are shared. Normal list and detail queries exclude archived records.
 
+Following SEC-03 (#12), an authenticated user who can read a record's Department but cannot write it receives 403 for update/deactivation. Records outside both the readable and writable Department scopes remain hidden with 404. Denied operations preserve the record and its audit/history fields. The [shared integration handover](pr27-shared-integration.md) identifies the Department and adapter decisions needed before a shared migration.
+
 ## Collections
 
 | Resource | Required creation fields | Other supported fields |
@@ -123,7 +125,7 @@ File-level errors use null `sheet` and `row`. Duplicate external identifiers are
 | Status | Meaning |
 | --- | --- |
 | 400 | Invalid field, geometry, relationship or workbook. Inspect field messages or row errors. |
-| 403 | No authenticated session, CSRF failure or no write permission with the current SessionAuthentication setup. |
+| 403 | No authenticated session, CSRF failure or insufficient write/catalog permission, including a read-only user's update/deactivation attempt. |
 | 404 | Missing, inactive or out-of-scope detail; no protected record is disclosed. |
 | 409 | Active dependents prevent logical deletion. |
 

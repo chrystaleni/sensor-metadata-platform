@@ -66,4 +66,6 @@ This is a concise reconstructed specification from the user's assignment and sub
 
 ## Review boundaries
 
+Follow-up on 14 November: Codex reproduced and corrected missing nested source/value fields on PATCH, preserving stored data and unrelated PATCH semantics. Inspection of SEC-03 then identified the explicit 403/404 distinction, which was aligned in the existing operational views. The final local suite used Python 3.13.18 and passed 39 tests plus 18 subtests. The API guide, validation mapping and shared integration handover were updated using the observed code and results. These are further refinements of entries 11-12; no teammate approval or new security implementation is claimed.
+
 The supplied logs reflect earlier project stages and an older FastAPI choice; the official repository and current backend assignment use Django. The approved final Phase 1/2 report and client workbook were not supplied. The implementation follows the actual current issue criteria and available domain decisions. ARCH-01 review must settle endpoint/workbook approval, shared Department migrations and authorization integration. No meetings, teammate approvals, client acceptance, production deployment or Blackboard submission are invented in this log.
