@@ -30,4 +30,10 @@ def test_organisation_migration_preserves_existing_departments():
         unassigned.refresh_from_db()
         assert unassigned.organisation_id is None
     finally:
+        executor = MigrationExecutor(connection)
+        executor.migrate(after)
+        department = executor.loader.project_state(after).apps.get_model(
+            "local_departments", "Department"
+        )
+        department.objects.filter(name__in=("North", "South", "Unassigned")).delete()
         MigrationExecutor(connection).migrate(original_targets)
