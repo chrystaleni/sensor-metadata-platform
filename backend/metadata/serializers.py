@@ -251,7 +251,9 @@ class NetworkElementSerializer(OperationalSerializer):
             matching = Q()
             for source, value in pairs:
                 matching |= Q(source=source, value=value)
-            existing = ExternalIdentifier.objects.active().filter(matching)
+            existing = ExternalIdentifier.objects.active().filter(
+                matching, department_id=self.context["department_id"],
+            )
             if self.instance is not None:
                 existing = existing.exclude(network_element_id=self.instance.pk)
             if existing.exists():
@@ -284,7 +286,8 @@ class NetworkElementSerializer(OperationalSerializer):
 
         additions = [
             ExternalIdentifier(
-                network_element=element, created_by=self.context["request"].user,
+                network_element=element, department_id=element.department_id,
+                created_by=self.context["request"].user,
                 updated_by=self.context["request"].user, **item,
             )
             for pair, item in incoming.items()
@@ -294,10 +297,10 @@ class NetworkElementSerializer(OperationalSerializer):
             with transaction.atomic():
                 ExternalIdentifier.objects.bulk_create(additions)
         except IntegrityError as error:
-            # Another Department can claim a pair after validation. Preserve
-            # the database guarantee and return a field error for that race.
+            # A direct writer in this Department can claim a pair after
+            # validation. Preserve the constraint and return a field error.
             diagnostic = getattr(error.__cause__, "diag", None)
-            if getattr(diagnostic, "constraint_name", None) != "meta_active_external_identifier":
+            if getattr(diagnostic, "constraint_name", None) != "meta_active_dept_external_identifier":
                 raise
             raise serializers.ValidationError({
                 "external_identifiers": ["An active identifier with this source and value already exists."]
