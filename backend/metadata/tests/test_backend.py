@@ -240,12 +240,23 @@ class MetadataAPITests(APITestCase):
         self.assertIn("department", response.data)
 
     def test_read_only_department_cannot_write(self):
-        device = self.device()
-        path = self.detail("physical-devices", device.pk)
+        device, element = self.device(), self.element()
+        measurement = Measurement.objects.create(
+            department_id=2, name="Visible measurement", physical_device=device, network_element=element,
+            measurement_type_id=self.catalog["measurement_type"],
+            measurement_unit_id=self.catalog["measurement_unit"],
+        )
         self.client.force_authenticate(self.viewer)
-        self.assertEqual(self.client.get(path).status_code, 200)
-        self.assertEqual(self.client.patch(path, {"name": "Blocked"}, format="json").status_code, 404)
-        self.assertEqual(self.client.delete(path).status_code, 404)
+        for resource, record in (
+            ("physical-devices", device), ("network-elements", element), ("measurements", measurement),
+        ):
+            with self.subTest(resource=resource):
+                path = self.detail(resource, record.pk)
+                before = type(record).objects.filter(pk=record.pk).values().get()
+                self.assertEqual(self.client.get(path).status_code, 200)
+                self.assertEqual(self.client.patch(path, {"name": "Blocked"}, format="json").status_code, 403)
+                self.assertEqual(self.client.delete(path).status_code, 403)
+                self.assertEqual(type(record).objects.filter(pk=record.pk).values().get(), before)
         self.assertEqual(self.upload(self.workbook_sheets()).status_code, 403)
 
     def test_measurement_and_network_detail_operations_keep_department_scope(self):
