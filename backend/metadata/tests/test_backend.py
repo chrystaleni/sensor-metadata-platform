@@ -16,7 +16,7 @@ from django.test import override_settings
 from openpyxl import Workbook
 from rest_framework.test import APIClient, APITestCase, APITransactionTestCase
 
-from local_departments.models import Department
+from local_departments.models import Department, Organisation
 
 from ..access import NoAccessPolicy
 from ..models import (
@@ -54,9 +54,11 @@ class FixturePolicy(NoAccessPolicy):
 
 
 def create_catalog():
-    Department.objects.create(pk=1, name="Platform")
-    Department.objects.create(pk=2, name="North")
-    Department.objects.create(pk=3, name="South")
+    platform, _ = Organisation.objects.get_or_create(code="platform", defaults={"name": "Platform"})
+    demo = Organisation.objects.create(code="demo", name="Demo")
+    Department.objects.create(pk=1, name="Platform", organisation=platform)
+    Department.objects.create(pk=2, name="North", organisation=demo)
+    Department.objects.create(pk=3, name="South", organisation=demo)
     return {
         "device_type": PhysicalDeviceType.objects.create(department_id=1, name="Weather station").pk,
         "element_type": NetworkElementType.objects.create(department_id=1, name="Monitoring site").pk,

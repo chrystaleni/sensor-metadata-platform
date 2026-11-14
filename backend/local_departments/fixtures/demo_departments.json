@@ -1,12 +1,20 @@
 [
   {
+    "model": "local_departments.organisation",
+    "fields": {"code": "platform", "name": "Platform"}
+  },
+  {
+    "model": "local_departments.organisation",
+    "fields": {"code": "demo", "name": "Demo"}
+  },
+  {
     "model": "local_departments.department",
     "pk": 1,
-    "fields": {"name": "Platform"}
+    "fields": {"name": "Platform", "organisation": ["platform"]}
   },
   {
     "model": "local_departments.department",
     "pk": 2,
-    "fields": {"name": "Demo Department"}
+    "fields": {"name": "Demo Department", "organisation": ["demo"]}
   }
 ]

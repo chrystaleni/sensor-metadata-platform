@@ -8,6 +8,7 @@ from django.db.models import QuerySet
 
 BEFORE = ("local_departments", "0002_organisation_department_organisation")
 AFTER = ("local_departments", "0003_backfill_department_organisations")
+REQUIRED = ("local_departments", "0004_require_department_organisation")
 METADATA = ("metadata", "0004_identifier_system_uniqueness")
 MANIFEST = "DEPARTMENT_ORGANISATION_BACKFILL"
 
@@ -169,3 +170,40 @@ def test_backfill_rolls_back_after_database_writes(backfill, monkeypatch):
     assert department.objects.get(pk=83).organisation_id is None
     assert device_type.objects.get().department_id == 83
     assert AFTER not in MigrationExecutor(connection).loader.applied_migrations
+
+
+def test_required_organisation_migration_preserves_existing_relationships(backfill, monkeypatch):
+    department, organisation, device, device_type = backfill
+    platform = department.objects.create(id=83, name="Shared Reference Data")
+    owner = department.objects.create(id=41, name="North")
+    catalog = device_type.objects.create(name="Station", department=platform)
+    record = device.objects.create(name="Meter", department=owner, device_type=catalog)
+    monkeypatch.setenv(MANIFEST, json.dumps({
+        "organisations": {"water": "Water Services"},
+        "departments": {"41": "water", "83": "platform"},
+        "platform_department_id": 83,
+    }))
+    MigrationExecutor(connection).migrate([AFTER])
+    before = list(department.objects.order_by("pk").values_list("pk", "name", "organisation_id"))
+
+    MigrationExecutor(connection).migrate([REQUIRED])
+
+    assert list(department.objects.order_by("pk").values_list("pk", "name", "organisation_id")) == before
+    record.refresh_from_db()
+    catalog.refresh_from_db()
+    assert record.department_id == 41
+    assert record.device_type_id == catalog.pk
+    assert catalog.department_id == 83
+
+
+def test_required_organisation_migration_rejects_unassigned_department(backfill):
+    department, organisation, _, _ = backfill
+    MigrationExecutor(connection).migrate([AFTER])
+    department.objects.create(id=41, name="North")
+
+    with pytest.raises(ValueError, match=r"First unassigned Department IDs: \[41\]"):
+        MigrationExecutor(connection).migrate([REQUIRED])
+
+    assert department.objects.get(pk=41).organisation_id is None
+    assert list(organisation.objects.values_list("code", flat=True)) == ["platform"]
+    assert REQUIRED not in MigrationExecutor(connection).loader.applied_migrations
