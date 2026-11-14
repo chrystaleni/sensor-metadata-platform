@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "core",
     "local_departments",
     "metadata",
+    "platform_security",
 ]
 
 if USE_POSTGIS:
