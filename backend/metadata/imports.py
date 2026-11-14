@@ -2,6 +2,7 @@ from dataclasses import dataclass
 import re
 from xml.etree.ElementTree import ParseError
 from zipfile import BadZipFile, ZipFile
+from zlib import error as ZlibError
 
 from defusedxml.common import DefusedXmlException
 from django.db import transaction
@@ -158,7 +159,7 @@ def read_workbook(upload):
         finally:
             workbook.close()
     except (
-        BadZipFile, InvalidFileException, ParseError, DefusedXmlException, OSError,
+        BadZipFile, ZlibError, InvalidFileException, ParseError, DefusedXmlException, OSError,
         ValueError, TypeError, KeyError, IndexError, RuntimeError, NotImplementedError, OverflowError,
     ):
         raise file_error("The file could not be read as an .xlsx workbook.") from None
