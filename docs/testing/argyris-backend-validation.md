@@ -12,10 +12,16 @@ The final local run used Python 3.13.18, Django 5.2.19, pytest 9.2.0, PostgreSQL
 | `python manage.py check` | No issues; 0 silenced. |
 | `python manage.py migrate --noinput` | All migrations, including 0004, applied successfully. |
 | `python manage.py makemigrations --check --dry-run` | No changes detected. |
-| `python -m pytest -v` | **39 passed, 18 subtests passed.** |
+| `python -m pytest -v` | **359 passed, 18 subtests passed; 0 failures.** Includes the original 39 and 320 error/boundary/session cases. |
 | `python manage.py migrate metadata 0003` then `0004` | Reversed and reapplied the new uniqueness migration successfully in the disposable database. |
 
 The original four database/health tests remain included. New tests do not replace them. CI runs the same backend checks on branch pushes and PRs to `main`; the [PR checks page](https://github.com/chrystaleni/sensor-metadata-platform/pull/27/checks) is the current remote result. The existing frontend job remains unchanged.
+
+## Individual error contracts
+
+The [error catalog](backend-error-catalog.md) records 310 independently parameterized errors: 259 REST, 33 workbook/import, 14 database and four CLI cases. Each case has a stable ID and full pytest node, with exact observed response JSON in the [machine-readable catalog](backend-error-cases.json). All rejected API/import requests and database operations compare complete Department/metadata rows before and after; command errors preserve existing files. Ten additional tests exercise positive boundaries, pagination fallback, read-only audit fields and actual session/CSRF handling.
+
+The first run reproduced an HTTP 500 from a corrupt DEFLATE stream inside an XLSX file. Adding `zlib.error` to the existing unreadable-file handler makes that request return the documented file error with 400. The 320 new tests then passed together with the unchanged original suite on Python 3.13.18 and isolated PostGIS. No shared database, schema, endpoint, workflow or frontend change was required. The generator reads a passing JUnit report and refuses incomplete/failing case evidence.
 
 ## Acceptance mapping
 
