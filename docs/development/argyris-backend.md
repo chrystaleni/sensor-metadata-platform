@@ -31,7 +31,17 @@ METADATA_DEPARTMENT_MODEL selects the Department model. The current default loca
 
 METADATA_ACCESS_POLICY selects the team's authorization adapter. It supplies readable_department_ids(request), writable_department_ids(request), and can_manage_controlled_lists(request). The default NoAccessPolicy denies metadata access. The APIs use DRF SessionAuthentication and Django's existing user model. The test-only FixturePolicy supplies synthetic department access for automated tests.
 
-METADATA_PLATFORM_DEPARTMENT_ID selects the built-in Platform Department. The example value is 1. The optional demo_departments and demo_catalog fixtures are intended for an empty local database and use IDs 1 and 2.
+After migrations, run from `backend/`:
+
+```sh
+python manage.py provision_platform_department
+```
+
+Copy the printed `METADATA_PLATFORM_DEPARTMENT_ID=<id>` line into the deployment environment or the local repository-root `.env`, then restart the backend. Use the printed ID for that database. There is no default owner. On repeat runs, the command returns the existing Department in Organisation `platform`, including an existing owner with a different display name. It rejects multiple Departments in that Organisation, a configured ID that disagrees, or rows in any shared controlled list owned by another Department. Resolve those conflicts with the data owner before retrying. The command preserves existing catalog and metadata links.
+
+Catalog operations and writes that need catalog references require a valid configured owner. Existing scoped operational reads can still work while configuration is corrected.
+
+For an isolated demo database, the alternative setup is to load `demo_departments` and `demo_catalog` **before** running the command. The fixtures use fixed Department IDs 1 and 2. Run the command to validate the fixture owner and obtain that database's configuration value.
 
 Authentication, real role rules, membership and API keys remain integration dependencies on SEC-01 through SEC-04. The code's callbacks are an implementation proposal for that integration.
 

@@ -292,11 +292,13 @@ class MetadataAPITests(APITestCase):
 
     def test_catalog_is_shared_and_only_manager_writes(self):
         rogue = PhysicalDeviceType.objects.create(department_id=3, name="Non-platform type")
-        self.assertEqual(self.client.get(f"{API}physical-device-types/").json()["count"], 1)
+        self.assertEqual(self.client.get(f"{API}physical-device-types/").status_code, 403)
         self.assertEqual(self.post("physical-device-types", {"name": "Pump"}).status_code, 403)
         response = self.post("physical-devices", {"department": 2, "name": "Invalid", "device_type": rogue.pk})
         self.assertEqual(response.status_code, 400)
         self.assertIn("device_type", response.data)
+        rogue.delete()
+        self.assertEqual(self.client.get(f"{API}physical-device-types/").json()["count"], 1)
 
         self.client.force_authenticate(self.manager)
         response = self.post("physical-device-types", {"name": "Pump", "department": 3})
