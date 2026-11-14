@@ -79,6 +79,19 @@ This is a concise reconstructed specification from the user's assignment and sub
 | Changes/corrections | A corrupt DEFLATE member reproduced an uncaught zlib.error/HTTP 500. The existing XLSX unreadable-file handler now catches that exception and returns its documented 400 error. Corrected the API example to DRF 3.18's indexed object error format and documented 405/415 and import request-vs-row error shapes. |
 | Related deliverables | Error catalog and JSON observations, executable tests and JUnit evidence. GitHub CI must be observed separately after publishing; local results do not assert remote success. |
 
+## Entry 14 - Department-scoped identifier privacy correction
+
+| Field | Record |
+| --- | --- |
+| Team member / AI tool | Argyris Fellas / Codex |
+| Date and phase | 15 November 2026; Privacy refinement and integration |
+| Prompt summary | Scope external-system identifier uniqueness to the target Department, add a new migration without editing existing ones, align API/Excel validation and test isolation before attempting the requested merge. |
+| Inspection | BE-05 requires rejecting same-system duplicates but does not explicitly define a global namespace. Existing global checks returned 400 for a hidden Department's identifier in six reproduced POST/PATCH/import cases. |
+| Changes | Added/backfilled identifier Department ownership, a conditional Department/source/value unique index and matching-parent composite FK in 0005. Scoped serializer validation and bulk inserts; Excel reuses that path. Preserved nested request/response and PATCH semantics. |
+| Validation | 24 dedicated isolation, permission, database, concurrency and migration regressions; full local suite 383 passed and 18 subtests passed on Python 3.13.18/PostGIS. Dependency/system/migration checks passed; old migrations remained byte-identical. |
+| Refinement | Updated previous global-conflict tests to same-Department conflicts, retained independent direct-writer collision coverage and documented downgrade refusal after cross-Department reuse. |
+| Boundary | No shared schema/role redesign, frontend/workflow change or shared-database migration. Remote CI and repository review requirements are checked separately before any merge; no teammate approval is invented. |
+
 ## Review boundaries
 
 Follow-up on 14 November: Codex reproduced and corrected missing nested source/value fields on PATCH, preserving stored data and unrelated PATCH semantics. Inspection of SEC-03 then identified the explicit 403/404 distinction, which was aligned in the existing operational views. The final local suite used Python 3.13.18 and passed 39 tests plus 18 subtests. The API guide, validation mapping and shared integration handover were updated using the observed code and results. These are further refinements of entries 11-12; no teammate approval or new security implementation is claimed.

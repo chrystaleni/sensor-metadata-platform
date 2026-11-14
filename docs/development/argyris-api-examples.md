@@ -65,7 +65,9 @@ Read an archived controlled-list value with `?include_inactive=true`. It has `is
 
 DELETE a Measurement before deleting its Device or Network Element. Successful deletion returns 204 and preserves the stored record, relationships, timestamp and actor. An active dependent record produces 409. A later normal GET of the archived detail returns 404. No user-facing endpoint permanently deletes metadata.
 
-External identifier updates replace the active list when supplied, retain unchanged pair IDs and archive removals. An active `(source,value)` may belong to only one Network Element, regardless of Department. The same value in a different source is allowed. Strings are compared exactly; source codes should use a consistent spelling.
+External identifier updates replace the active list when supplied, retain unchanged pair IDs and archive removals. Within the selected Department, an active `(source,value)` may belong to only one Network Element. Another Department may use the same pair independently, even if the caller can read both Departments. Duplicate validation queries only the target Department, so a hidden Department's claim does not change API or Excel success/failure. The same value in a different source is allowed. Strings are compared exactly; source codes should use a consistent spelling.
+
+Identifier ownership is derived from the Network Element. The nested request/response shape remains `{id,source,value}` (id is read-only); callers do not select a separate Department per identifier. The [Department identifier handover](pr27-identifier-departments.md) records migration 0005 and the privacy/concurrency regressions.
 
 ### PATCH external identifiers
 

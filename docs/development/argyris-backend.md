@@ -1,6 +1,6 @@
 # Backend contribution by Argyris Fellas
 
-Recorded on 13 November and updated on 14 November 2026. This branch implements the backend areas of BE-01 through BE-08 against the existing Django project and PostGIS configuration.
+Recorded on 13 November and updated on 15 November 2026. This branch implements the backend areas of BE-01 through BE-08 against the existing Django project and PostGIS configuration.
 
 The backend contribution is complete for review under BE-01 through BE-08. The shared Department schema and access adapter, the final API contract under ARCH-01 (#9), and workbook-column approval remain team integration decisions before merge and deployment.
 
@@ -49,7 +49,7 @@ List parameters include search, ordering, page, page_size and relationship field
 
 Controlled-list reads can include archived values using include_inactive=true. Such values are returned with is_active=false and cannot be chosen on metadata writes.
 
-Network element external_identifiers accepts objects with source and value. An update containing this list replaces the active list, preserving unchanged pairs and archiving removals. Active `(source, value)` pairs are unique across Network Elements, including across Departments, as required by BE-05's external-system duplicate rule. Comparisons use exact strings. An archived pair remains in history and may be reused. Duplicate responses expose no other record or Department details. General text search includes active identifier sources and values; retired identifiers are excluded.
+Network element external_identifiers accepts objects with source and value. An update containing this list replaces the active list, preserving unchanged pairs and archiving removals. Active `(source, value)` pairs are unique across Network Elements within the selected Department. The same pair is allowed in another Department, and duplicate validation does not inspect other Departments. Migration 0005 adds and backfills ownership, enforces matching parent ownership and replaces the global constraint; existing migrations are unchanged. Comparisons use exact strings. An archived pair remains in history and may be reused. General text search includes active identifier sources and values; retired identifiers are excluded. See the [Department identifier handover](pr27-identifier-departments.md) for the clarified rule and tests.
 
 ## Proposed workbook format
 
@@ -69,13 +69,13 @@ Generate the exact implemented headers with `python manage.py metadata_workbook 
 
 ## Validation performed
 
-The final 14 November integrated project checks used Python 3.13.18, Django 5.2.19, PostgreSQL 16.15, PostGIS 3.4.6 and GDAL 3.12.4.
+The final 15 November integrated project checks used Python 3.13.18, Django 5.2.19, PostgreSQL 16.15, PostGIS 3.4.6 and GDAL 3.12.4.
 
 - Django system check reported no issues.
 - All migrations were applied to the disposable database.
 - makemigrations --check --dry-run reported no changes.
-- python -m pytest -v reported 359 passed and 18 passed subtests, including the original 39 tests and 320 added error/boundary/session tests.
-- Tests exercise Excel rollback, department scope, optional account/model identifiers, inactive controlled values, audit attribution, concurrent parent/catalog archival and concurrent identifier collisions across Departments.
+- python -m pytest -v reported 383 passed and 18 passed subtests, including the previous 359 tests and 24 Department-identifier regressions.
+- Tests exercise Excel rollback, Department scope, optional account/model identifiers, inactive controlled values, audit attribution and concurrent parent/catalog archival. Identifier tests reject same-Department collisions, permit independent claims across Departments and verify migration backfill/downgrade integrity.
 - The generated example workbook was imported through the actual API and linked all three domains successfully.
 - Read-only update/deactivation returns 403 for all three domains without changing stored data; cross-Department access still returns 404.
 
