@@ -445,7 +445,7 @@ class MetadataAPITests(APITestCase):
         self.assertEqual(self.client.get(f"{API}physical-devices/?device_type=0").status_code, 400)
         self.assertEqual(self.client.get(f"{API}physical-devices/?device_type=999").json()["count"], 0)
 
-    def test_identifiers_are_unique_per_external_system_across_elements(self):
+    def test_identifiers_are_unique_within_department_per_external_system(self):
         first = self.post("network-elements", {
             "department": 2, "name": "First", "element_type": self.catalog["element_type"],
             "external_identifiers": [{"source": "ERP", "value": "asset-101"}],
@@ -453,7 +453,7 @@ class MetadataAPITests(APITestCase):
         self.assertEqual(first.status_code, 201, first.data)
         self.client.force_authenticate(self.multi)
         duplicate = self.post("network-elements", {
-            "department": 3, "name": "Duplicate", "element_type": self.catalog["element_type"],
+            "department": 2, "name": "Duplicate", "element_type": self.catalog["element_type"],
             "external_identifiers": [{"source": "ERP", "value": "asset-101"}],
         })
         self.assertEqual(duplicate.status_code, 400, duplicate.data)
@@ -767,10 +767,10 @@ class MetadataConcurrencyTests(APITransactionTestCase):
                         ("Concurrent", element_type, '[{"source":"ERP","value":"concurrent-101"}]'),
                     ]})
                     return client.post(
-                        f"{API}imports/excel/", {"department": 3, "file": workbook}, format="multipart",
+                        f"{API}imports/excel/", {"department": 2, "file": workbook}, format="multipart",
                     )
                 return client.post(f"{API}network-elements/", {
-                    "department": 3, "name": "Concurrent", "element_type": element_type,
+                    "department": 2, "name": "Concurrent", "element_type": element_type,
                     "external_identifiers": [pair],
                 }, format="json")
             finally:
@@ -793,7 +793,7 @@ class MetadataConcurrencyTests(APITransactionTestCase):
                             break
                     sleep(0.02)
                 else:
-                    self.fail("The duplicate identifier did not wait for the competing transaction.")
+                    self.fail("The duplicate identifier did not wait for its Department's competing write.")
             response = pending.result(timeout=5)
         self.assertEqual(response.status_code, 400, response.data)
         if importing:
