@@ -248,6 +248,26 @@ class MetadataAPITests(APITestCase):
         self.assertEqual(self.client.delete(path).status_code, 404)
         self.assertEqual(self.upload(self.workbook_sheets()).status_code, 403)
 
+    def test_measurement_and_network_detail_operations_keep_department_scope(self):
+        device, element = self.device(department=3), self.element(department=3)
+        measurement = Measurement.objects.create(
+            department_id=3, name="Private measurement", physical_device=device, network_element=element,
+            measurement_type_id=self.catalog["measurement_type"],
+            measurement_unit_id=self.catalog["measurement_unit"],
+        )
+        for resource, record in (("measurements", measurement), ("network-elements", element)):
+            with self.subTest(resource=resource):
+                path = self.detail(resource, record.pk)
+                before = type(record).objects.filter(pk=record.pk).values().get()
+                self.assertEqual(self.client.get(path).status_code, 404)
+                self.assertEqual(self.client.patch(path, {"name": "Blocked"}, format="json").status_code, 404)
+                self.assertEqual(self.client.delete(path).status_code, 404)
+                self.assertEqual(self.client.get(f"{API}{resource}/?department=3").json()["count"], 0)
+                self.assertEqual(type(record).objects.filter(pk=record.pk).values().get(), before)
+        self.client.force_authenticate(self.multi)
+        for resource, record in (("measurements", measurement), ("network-elements", element)):
+            self.assertEqual(self.client.get(self.detail(resource, record.pk)).status_code, 200)
+
     @override_settings(METADATA_ACCESS_POLICY="metadata.access.NoAccessPolicy")
     def test_default_policy_has_no_access(self):
         self.device()
@@ -345,10 +365,61 @@ class MetadataAPITests(APITestCase):
         self.assertEqual(response.status_code, 400)
 
         response = self.client.patch(path, {"external_identifiers": initial[:1]}, format="json")
+        self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual([item["id"] for item in response.data["external_identifiers"]], [keep_id])
+        self.assertEqual(self.client.get(path).json()["external_identifiers"], response.data["external_identifiers"])
         self.assertEqual(ExternalIdentifier.objects.get(pk=retired_id).deleted_by_id, self.editor.pk)
         self.assertEqual(self.client.get(f"{API}network-elements/?identifier=retired").json()["count"], 0)
         self.assertEqual(self.client.get(f"{API}network-elements/?identifier=same").json()["count"], 1)
+
+    def test_patch_rejects_incomplete_identifiers_without_changing_stored_data(self):
+        element = self.element()
+        ExternalIdentifier.objects.create(network_element=element, source="ERP", value="existing-101")
+        path = self.detail("network-elements", element.pk)
+        before_element = NetworkElement.objects.filter(pk=element.pk).values().get()
+        before_identifiers = list(ExternalIdentifier.objects.filter(network_element=element).values())
+        cases = (
+            ([{"value": "new-101"}], 0, {"source"}),
+            ([{"source": "ERP"}], 0, {"value"}),
+            ([{}], 0, {"source", "value"}),
+            ([{"source": "SCADA", "value": "valid-101"}, {"source": "ERP"}], 1, {"value"}),
+        )
+        self.client.raise_request_exception = False
+        for identifiers, index, missing_fields in cases:
+            with self.subTest(identifiers=identifiers):
+                response = self.client.patch(path, {
+                    "name": "Must not be saved", "external_identifiers": identifiers,
+                }, format="json")
+                self.assertEqual(response.status_code, 400, response.content)
+                errors = response.data["external_identifiers"][index]
+                self.assertEqual(set(errors), missing_fields)
+                for field in missing_fields:
+                    self.assertEqual(str(errors[field][0]), "This field is required.")
+                    self.assertEqual(errors[field][0].code, "required")
+                self.assertEqual(NetworkElement.objects.filter(pk=element.pk).values().get(), before_element)
+                self.assertEqual(
+                    list(ExternalIdentifier.objects.filter(network_element=element).values()), before_identifiers,
+                )
+
+    def test_patch_can_omit_or_clear_external_identifiers(self):
+        element = self.element()
+        identifier = ExternalIdentifier.objects.create(network_element=element, source="ERP", value="existing-101")
+        path = self.detail("network-elements", element.pk)
+        before = ExternalIdentifier.objects.filter(pk=identifier.pk).values().get()
+        response = self.client.patch(path, {"name": "Renamed site"}, format="json")
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["name"], "Renamed site")
+        self.assertEqual(response.data["external_identifiers"], [
+            {"id": identifier.pk, "source": "ERP", "value": "existing-101"},
+        ])
+        self.assertEqual(ExternalIdentifier.objects.filter(pk=identifier.pk).values().get(), before)
+        response = self.client.patch(path, {"external_identifiers": []}, format="json")
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["external_identifiers"], [])
+        identifier.refresh_from_db()
+        self.assertIsNotNone(identifier.deleted_at)
+        self.assertEqual(identifier.deleted_by_id, self.editor.pk)
+        self.assertEqual(ExternalIdentifier.objects.filter(network_element=element).count(), 1)
 
     def test_search_sorting_filters_and_pagination(self):
         first = self.device(name="Matching station")
