@@ -1,6 +1,6 @@
 # Backend API and Excel guide
 
-Argyris Fellas, 13 November 2026. This documents the implementation in PR #27 for the shared API contract review in ARCH-01. All examples use synthetic data.
+Argyris Fellas, reviewed 14 November 2026. This documents the implementation in PR #27 for the shared API contract review in ARCH-01. All examples use synthetic data.
 
 ## Authentication and ownership
 
@@ -64,6 +64,30 @@ Read an archived controlled-list value with `?include_inactive=true`. It has `is
 DELETE a Measurement before deleting its Device or Network Element. Successful deletion returns 204 and preserves the stored record, relationships, timestamp and actor. An active dependent record produces 409. A later normal GET of the archived detail returns 404. No user-facing endpoint permanently deletes metadata.
 
 External identifier updates replace the active list when supplied, retain unchanged pair IDs and archive removals. An active `(source,value)` may belong to only one Network Element, regardless of Department. The same value in a different source is allowed. Strings are compared exactly; source codes should use a consistent spelling.
+
+### PATCH external identifiers
+
+Each supplied identifier must include both `source` and `value`, including on PATCH. Omitting the entire `external_identifiers` field leaves the stored list unchanged. Explicitly sending `[]` archives all active identifiers. These rules do not make unrelated record fields required on PATCH.
+
+For example, PATCH `/api/v1/network-elements/7/` with:
+
+```json
+{"external_identifiers":[{"source":"ERP","value":"SITE-101"}]}
+```
+
+returns 200 with the updated Network Element. An illustrative response is:
+
+```json
+{"id":7,"department":2,"name":"Site A","description":"","created_at":"2026-11-14T08:00:00Z","updated_at":"2026-11-14T08:05:00Z","created_by":2,"updated_by":2,"is_active":true,"element_type":1,"geometry":null,"external_identifiers":[{"id":12,"source":"ERP","value":"SITE-101"}],"dma_model_id":"","strategic_model_id":""}
+```
+
+Sending `{"external_identifiers":[{"source":"ERP"}]}` returns 400:
+
+```json
+{"external_identifiers":[{"value":["This field is required."]}]}
+```
+
+Missing `source` produces the corresponding `source` error. Error positions match the submitted list. An invalid item rejects the entire request: identifiers, archive/audit fields and unrelated record changes remain unchanged. A valid item elsewhere in the same list is not partially saved.
 
 ## Excel workflow
 
