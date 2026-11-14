@@ -1,10 +1,10 @@
 # Backend validation and acceptance mapping
 
-Argyris Fellas, 13 November 2026. Scope is BE-01 through BE-08 in PR #27. The backend was audited against the actual GitHub issue bodies. Closing the issues at the assignee's request does not signify teammate approval, a merged PR or a deployed application.
+Argyris Fellas, updated 14 November 2026. Scope is BE-01 through BE-08 in PR #27. The backend was audited against the actual GitHub issue bodies and the SEC-03 status-code contract. Closing the issues at the assignee's request does not signify teammate approval, a merged PR or a deployed application.
 
 ## Executed checks
 
-The final local run used Python 3.12.14, Django 5.2.19, pytest 9.2.0, PostgreSQL 16.15, PostGIS 3.4.6 and GDAL 3.12.4. A newly initialized disposable PostGIS database was used for migrations; pytest created its own separate test database. No shared database was reset or modified.
+The final local run used Python 3.13.18, Django 5.2.19, pytest 9.2.0, PostgreSQL 16.15, PostGIS 3.4.6 and GDAL 3.12.4. A separate disposable PostGIS database was used for migrations; pytest created its own separate test database. No shared database was reset or modified.
 
 | Command | Observed result |
 | --- | --- |
@@ -12,7 +12,7 @@ The final local run used Python 3.12.14, Django 5.2.19, pytest 9.2.0, PostgreSQL
 | `python manage.py check` | No issues; 0 silenced. |
 | `python manage.py migrate --noinput` | All migrations, including 0004, applied successfully. |
 | `python manage.py makemigrations --check --dry-run` | No changes detected. |
-| `python -m pytest -v` | **36 passed, 9 subtests passed.** |
+| `python -m pytest -v` | **39 passed, 18 subtests passed.** |
 | `python manage.py migrate metadata 0003` then `0004` | Reversed and reapplied the new uniqueness migration successfully in the disposable database. |
 
 The original four database/health tests remain included. New tests do not replace them. CI runs the same backend checks on branch pushes and PRs to `main`; the [PR checks page](https://github.com/chrystaleni/sensor-metadata-platform/pull/27/checks) is the current remote result. The existing frontend job remains unchanged.
@@ -40,9 +40,13 @@ Test names below are in `backend/metadata/tests/test_backend.py` unless stated o
 4. Search native and linked fields and active external identifiers, filter and page results, and confirm another Department's records remain invisible.
 5. Hold an archive transaction while a Measurement creation competes; verify creation waits and then rejects the inactive reference.
 6. Compete for one external identifier from two Departments. Verify the unique index chooses one writer and the other receives a 400 field error, or a 400 Excel row error with rollback, rather than a server error.
+7. PATCH incomplete external identifiers, including a mixed valid/incomplete list. Verify field-specific 400 errors and unchanged parent/identifier rows; valid, omitted-list and empty-list requests retain their semantics.
+8. Read records in a read-only user's Department and reject PATCH/DELETE with 403 across all three domains without changing stored rows. Keep 404 for records outside the user's Department scope, as required by SEC-03.
 
 FixturePolicy is used only inside tests to supply synthetic access scopes through the production adapter interface. These tests validate backend integration and denial behavior; they do not establish that Chrystaleni's real roles, session login, memberships or API keys have been implemented. React user journeys and client acceptance are separate team validation.
 
 ## Final audit refinements
 
 The audit found per-element uniqueness where BE-05 requires rejecting duplicate identifiers in the same external system. Migration 0004 enforces active `(source,value)` uniqueness and the API handles concurrent collisions. It also found that general network search omitted external identifiers. Active sources/values now participate in search without duplicate results or retired/unauthorized matches. The tests above reproduce both defects and their fixes.
+
+The 14 November follow-up fixed nested required fields on PATCH and aligned readable-but-not-writable records with SEC-03's 403 response. The latter regression first reproduced incorrect 404 responses for all three domains; the final suite passed all 39 tests and 18 subtests. These follow-ups required no model or migration changes. The [shared integration handover](../development/pr27-shared-integration.md) records the remaining team-owned configuration decisions.
