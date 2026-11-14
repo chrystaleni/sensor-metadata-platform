@@ -5,7 +5,7 @@ from django.db.models.deletion import ProtectedError
 
 from local_departments.models import Department, Organisation
 
-from .models import UserDepartment
+from .models import UserDepartment, UserRole
 
 
 pytestmark = pytest.mark.django_db
@@ -73,3 +73,54 @@ def test_department_with_membership_is_protected_from_deletion(membership):
 
     membership.refresh_from_db()
     membership.department.refresh_from_db()
+
+
+@pytest.mark.parametrize("role", ["VIEWER", "EDITOR", "DEPARTMENT_ADMIN", "SYSTEM_ADMIN"])
+def test_user_role_can_be_assigned(membership, role):
+    assignment = UserRole.objects.create(user=membership.user, role=role)
+    assignment.refresh_from_db()
+
+    assert assignment.role == role
+    assert membership.user.platform_role.pk == assignment.pk
+    assert list(membership.user.department_memberships.values_list("pk", "department_id")) == [
+        (membership.pk, membership.department_id),
+    ]
+
+
+def test_user_cannot_have_multiple_role_assignments(membership):
+    UserRole.objects.create(user=membership.user, role=UserRole.Role.VIEWER)
+
+    with pytest.raises(IntegrityError), transaction.atomic():
+        UserRole.objects.create(user=membership.user, role=UserRole.Role.EDITOR)
+
+
+@pytest.mark.parametrize("role", ["OWNER", "viewer", "", None])
+def test_database_rejects_invalid_role(membership, role):
+    with pytest.raises(IntegrityError), transaction.atomic():
+        UserRole.objects.create(user=membership.user, role=role)
+
+
+def test_user_can_have_membership_without_role(membership):
+    membership.user.refresh_from_db()
+    assert not UserRole.objects.filter(user=membership.user).exists()
+
+    with pytest.raises(IntegrityError), transaction.atomic():
+        UserRole.objects.create(user=membership.user)
+
+
+def test_deleting_role_preserves_user_and_membership(membership):
+    assignment = UserRole.objects.create(user=membership.user, role=UserRole.Role.EDITOR)
+
+    assignment.delete()
+
+    membership.user.refresh_from_db()
+    membership.refresh_from_db()
+    assert not UserRole.objects.filter(user=membership.user).exists()
+
+
+def test_deleting_user_removes_role_assignment(membership):
+    assignment = UserRole.objects.create(user=membership.user, role=UserRole.Role.SYSTEM_ADMIN)
+
+    membership.user.delete()
+
+    assert not UserRole.objects.filter(pk=assignment.pk).exists()
