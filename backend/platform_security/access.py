@@ -5,7 +5,7 @@ from .models import UserDepartment, UserRole
 
 
 class DepartmentAccessPolicy(NoAccessPolicy):
-    """Resolve operational access from current role and membership rows."""
+    """Resolve metadata access from current role and membership rows."""
 
     def readable_department_ids(self, request):
         return self._department_ids(request, write=False)
@@ -13,12 +13,18 @@ class DepartmentAccessPolicy(NoAccessPolicy):
     def writable_department_ids(self, request):
         return self._department_ids(request, write=True)
 
-    def _department_ids(self, request, *, write):
+    def can_manage_controlled_lists(self, request):
+        return self._role(request) == UserRole.Role.SYSTEM_ADMIN
+
+    def _role(self, request):
         user = request.user
         if not user.is_authenticated or not user.is_active:
-            return ()
+            return None
 
-        role = UserRole.objects.filter(user_id=user.pk).values_list("role", flat=True).first()
+        return UserRole.objects.filter(user_id=user.pk).values_list("role", flat=True).first()
+
+    def _department_ids(self, request, *, write):
+        role = self._role(request)
         if role == UserRole.Role.SYSTEM_ADMIN:
             return Department.objects.values_list("pk", flat=True)
 
@@ -28,4 +34,4 @@ class DepartmentAccessPolicy(NoAccessPolicy):
         if role not in allowed:
             return ()
 
-        return UserDepartment.objects.filter(user_id=user.pk).values_list("department_id", flat=True)
+        return UserDepartment.objects.filter(user_id=request.user.pk).values_list("department_id", flat=True)
