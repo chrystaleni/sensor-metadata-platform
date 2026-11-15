@@ -1,5 +1,5 @@
 import {useEffect,useRef,useState} from 'react';
-import {loadLeaflet} from './GisMap';
+import {loadLeaflet} from './mapUtils';
 export default function MapPicker({geometryType='Point',onApply,onCancel}){
  const el=useRef(null),map=useRef(null),layer=useRef(null),coords=useRef([]),[count,setCount]=useState(0),[error,setError]=useState('');
  useEffect(()=>{let alive=true;loadLeaflet().then(L=>{if(!alive)return;const m=L.map(el.current).setView([35.16,33.36],11);map.current=m;L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(m);layer.current=L.featureGroup().addTo(m);m.on('click',e=>{const p=[Number(e.latlng.lng.toFixed(6)),Number(e.latlng.lat.toFixed(6))];if(geometryType==='Point')coords.current=[p];else coords.current=[...coords.current,p];render();});function render(){layer.current.clearLayers();const pts=coords.current;pts.forEach(p=>L.circleMarker([p[1],p[0]],{radius:5}).addTo(layer.current));if(geometryType==='LineString'&&pts.length>1)L.polyline(pts.map(p=>[p[1],p[0]])).addTo(layer.current);if(geometryType==='Polygon'&&pts.length>2)L.polygon(pts.map(p=>[p[1],p[0]])).addTo(layer.current);setCount(pts.length)}setTimeout(()=>m.invalidateSize(),100)}).catch(e=>alive&&setError(e.message));return()=>{alive=false;map.current?.remove();map.current=null}},[geometryType]);
