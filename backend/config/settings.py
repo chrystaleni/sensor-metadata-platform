@@ -51,6 +51,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "platform_security.session_expiry.SessionExpiryMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -120,6 +121,16 @@ except ValueError as error:
     raise ImproperlyConfigured("Login throttling settings must be integers.") from error
 if not 0 < LOGIN_FAILURE_LIMIT <= 2**31 - 1 or not 0 < LOGIN_FAILURE_WINDOW_SECONDS <= 2**31 - 1:
     raise ImproperlyConfigured("Login throttling settings must be positive 32-bit integers.")
+
+try:
+    SESSION_IDLE_TIMEOUT_SECONDS = int(os.environ.get("SESSION_IDLE_TIMEOUT_SECONDS", "1800"))
+    SESSION_ABSOLUTE_TIMEOUT_SECONDS = int(os.environ.get("SESSION_ABSOLUTE_TIMEOUT_SECONDS", "28800"))
+except ValueError as error:
+    raise ImproperlyConfigured("Session timeout settings must be integers.") from error
+if not 0 < SESSION_IDLE_TIMEOUT_SECONDS <= SESSION_ABSOLUTE_TIMEOUT_SECONDS:
+    raise ImproperlyConfigured("Session timeouts require 0 < idle timeout <= absolute timeout.")
+if SESSION_ABSOLUTE_TIMEOUT_SECONDS > 2**31 - 1:
+    raise ImproperlyConfigured("The absolute session timeout must fit in a positive 32-bit integer.")
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"

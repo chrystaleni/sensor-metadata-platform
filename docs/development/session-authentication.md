@@ -13,6 +13,20 @@ Keep cookies enabled. Read the CSRF cookie and send its value in `X-CSRFToken` o
 
 The session cookie is managed by the browser. The session response contains only the current user's ID and username. Metadata authorization uses the separately configured access policy. Signing in leaves role and membership assignments untouched.
 
+## Session expiry
+
+Django enforces two server-side deadlines. By default a session expires after 30 minutes of inactivity or eight hours after successful login, whichever comes first. Set `SESSION_IDLE_TIMEOUT_SECONDS` (default `1800`) and `SESSION_ABSOLUTE_TIMEOUT_SECONDS` (default `28800`) in the Django environment to configure them. Use positive whole seconds with idle no greater than absolute. The absolute value must fit in a signed 32-bit integer.
+
+Successful authenticated metadata writes renew inactivity. This includes successful `POST`, `PUT`, `PATCH` and `DELETE` requests to the metadata API, including catalog changes and Excel import. Reads, background polling, session checks, CSRF bootstrap, anonymous requests, unsuccessful writes and failed or throttled login attempts leave the timer unchanged. Browsing or editing locally without saving can therefore reach the idle deadline. A request that is still running when the session expires cannot renew it afterward. A write authorized before expiry can finish.
+
+Activity leaves the absolute deadline fixed. Browser refresh and cookie restoration use the existing deadlines. At expiry, `GET /session/` reports `{"authenticated":false,"user":null}` and protected API requests receive the usual unauthenticated response. The user must sign in again. A successful login starts a new lifetime and rotates the session identifier and CSRF token, including when the same user signs in again. Existing sessions from before this change require a fresh login.
+
+PostgreSQL skips session rows locked by other requests and limits lock waits during expiry verification and renewal to 250 milliseconds within each transaction. If expiry verification cannot complete before the view runs because the row is busy or the database operation is unavailable, Django returns a generic `503` with `Retry-After: 1`. The protected view does not run. This response is separate from the login attempt limiter.
+
+Inactivity renewal runs in a separate transaction after a successful metadata write. The application logs contention and recoverable renewal failures without session details. The completed write keeps its original success response and the session retains its existing deadlines. A missed renewal can therefore cause an active user to reach the idle deadline. The lock timeout limits lock acquisition, and normal infrastructure timeouts still govern connection and network failures. Configure production database logs to avoid recording SQL statements or parameters containing session identifiers.
+
+Keep Django's database session backend and point every worker at the same PostgreSQL database. Synchronize worker clocks, Django secrets and timeout settings. Leave Django's default `SESSION_SAVE_EVERY_REQUEST=False` in place. Schedule Django's `clearsessions` command to remove expired rows. Serve production traffic over HTTPS with `SESSION_COOKIE_SECURE=True`, `CSRF_COOKIE_SECURE=True` and the Django session cookie marked HttpOnly. The local HTTP development settings remain suitable for the same-origin development proxy.
+
 ## Login attempt limits
 
 Apply the security migrations before serving login, and point all application workers at the same PostgreSQL database. `LOGIN_FAILURE_LIMIT` defaults to `5` and `LOGIN_FAILURE_WINDOW_SECONDS` defaults to `900`. Use the same settings, clock synchronization and Django secret across workers.

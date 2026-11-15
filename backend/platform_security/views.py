@@ -67,7 +67,11 @@ def login(request):
         )
     if user is None:
         return JsonResponse({"detail": "Invalid username or password."}, status=400)
+    previous_key = request.session.session_key
     auth.login(request, user)
+    if previous_key and request.session.session_key == previous_key:
+        # Django keeps the key when the same user signs in again.
+        request.session.cycle_key()
     return session_response(user)
 
 
