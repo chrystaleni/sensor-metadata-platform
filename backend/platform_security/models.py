@@ -45,3 +45,9 @@ class UserRole(models.Model):
                 name="platform_security_user_role_valid",
             ),
         ]
+
+
+class LoginAttemptWindow(models.Model):
+    client_key = models.CharField(max_length=64, primary_key=True)
+    failures = models.PositiveIntegerField()
+    expires_at = models.DateTimeField(db_index=True)

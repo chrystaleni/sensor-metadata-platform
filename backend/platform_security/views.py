@@ -6,6 +6,8 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST
 
+from .login_throttle import LoginThrottled, LoginThrottleUnavailable, authenticate_with_throttle
+
 
 def session_response(user):
     return JsonResponse({
@@ -49,8 +51,21 @@ def login(request):
     if "\x00" in username:
         return JsonResponse({"detail": "Invalid username or password."}, status=400)
 
-    user = auth.authenticate(request, username=username, password=password)
-    if user is None or not user.is_active:
+    try:
+        user = authenticate_with_throttle(request, username, password)
+    except LoginThrottled as error:
+        return JsonResponse(
+            {"detail": "Too many login attempts. Try again later."},
+            status=429,
+            headers={"Retry-After": str(error.retry_after)},
+        )
+    except LoginThrottleUnavailable:
+        return JsonResponse(
+            {"detail": "Login is temporarily unavailable."},
+            status=503,
+            headers={"Retry-After": "1"},
+        )
+    if user is None:
         return JsonResponse({"detail": "Invalid username or password."}, status=400)
     auth.login(request, user)
     return session_response(user)

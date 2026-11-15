@@ -113,6 +113,14 @@ elif DATABASE_ENGINE in {"postgis", "postgres", "postgresql"}:
 
 AUTH_PASSWORD_VALIDATORS = []
 
+try:
+    LOGIN_FAILURE_LIMIT = int(os.environ.get("LOGIN_FAILURE_LIMIT", "5"))
+    LOGIN_FAILURE_WINDOW_SECONDS = int(os.environ.get("LOGIN_FAILURE_WINDOW_SECONDS", "900"))
+except ValueError as error:
+    raise ImproperlyConfigured("Login throttling settings must be integers.") from error
+if not 0 < LOGIN_FAILURE_LIMIT <= 2**31 - 1 or not 0 < LOGIN_FAILURE_WINDOW_SECONDS <= 2**31 - 1:
+    raise ImproperlyConfigured("Login throttling settings must be positive 32-bit integers.")
+
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_I18N = True
