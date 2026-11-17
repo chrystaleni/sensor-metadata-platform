@@ -19,9 +19,20 @@ TARGET = ("metadata", "0005_identifier_department_scope")
 INDEX_NAME = "meta_active_external_identifier"
 
 
+class OriginalMigrationLoader(MigrationLoader):
+    """Exclude replacement files before constructing the historical graph."""
+
+    def load_disk(self):
+        super().load_disk()
+        self.disk_migrations = {
+            key: migration for key, migration in self.disk_migrations.items()
+            if not migration.replaces
+        }
+
+
 def original_executor():
     executor = MigrationExecutor(connection)
-    executor.loader = MigrationLoader(connection, replace_migrations=False)
+    executor.loader = OriginalMigrationLoader(connection, replace_migrations=False)
     return executor
 
 
@@ -44,8 +55,7 @@ def identifier_index():
 def test_original_0004_rejects_cross_department_pairs_atomically():
     assert connection.vendor == "postgresql"
     executor = original_executor()
-    original_targets = executor.loader.graph.leaf_nodes()
-    identifiers = None
+    original_targets = MigrationExecutor(connection).loader.graph.leaf_nodes()
     fixture_ids = []
     try:
         executor.migrate([BASELINE])
@@ -101,4 +111,191 @@ def test_original_0004_rejects_cross_department_pairs_atomically():
                         [fixture_ids],
                     )
         finally:
-            original_executor().migrate(original_targets)
+            MigrationExecutor(connection).migrate(original_targets)
+
+
+REPLACEMENT = ("metadata", "0004_squashed_0005_identifier_department_scope")
+
+
+@pytest.fixture
+def historical_identifiers():
+    targets = MigrationExecutor(connection).loader.graph.leaf_nodes()
+    executor = original_executor()
+    recorder = MigrationRecorder(connection)
+    original_history = set(recorder.applied_migrations())
+    unrelated_history = list(
+        recorder.migration_qs.exclude(app="metadata").order_by("pk").values()
+    )
+    ids = []
+    try:
+        executor.migrate([BASELINE])
+        recorder.record_unapplied(*REPLACEMENT)
+        assert REPLACEMENT not in recorder.applied_migrations()
+        assert list(
+            recorder.migration_qs.exclude(app="metadata").order_by("pk").values()
+        ) == unrelated_history
+        apps = original_executor().loader.project_state([BASELINE]).apps
+        Department = apps.get_model(*settings.METADATA_DEPARTMENT_MODEL.split("."))
+        Element = apps.get_model("metadata", "NetworkElement")
+        Kind = apps.get_model("metadata", "NetworkElementType")
+        Identifier = apps.get_model("metadata", "ExternalIdentifier")
+        User = apps.get_model(*settings.AUTH_USER_MODEL.split("."))
+        creator = User.objects.create(username="upgrade-creator")
+        updater = User.objects.create(username="upgrade-updater")
+        deleter = User.objects.create(username="upgrade-deleter")
+        north = Department.objects.create(name="Replacement North")
+        south = Department.objects.create(name="Replacement South")
+        kind = Kind.objects.create(department=north, name="Site")
+        parents = [
+            Element.objects.create(department=owner, element_type=kind, name=owner.name)
+            for owner in (north, south)
+        ]
+
+        def add(parent, *, archived=False):
+            from django.utils import timezone
+
+            row = Identifier.objects.create(
+                network_element=parent, source="ERP", value="replacement-pair",
+                deleted_at=timezone.now() if archived else None,
+                created_by=creator, updated_by=updater,
+                deleted_by=deleter if archived else None,
+            )
+            ids.append(row.pk)
+            return row
+
+        yield Identifier, parents, add
+    finally:
+        try:
+            if ids:
+                with connection.cursor() as cursor:
+                    cursor.execute("DELETE FROM metadata_externalidentifier WHERE id = ANY(%s)", [ids])
+        finally:
+            MigrationExecutor(connection).migrate(targets)
+            assert set(recorder.applied_migrations()) == original_history
+            assert list(
+                recorder.migration_qs.exclude(app="metadata").order_by("pk").values()
+            ) == unrelated_history
+
+
+@pytest.mark.postgis
+@pytest.mark.django_db(transaction=True)
+def test_replacement_preserves_active_and_archived_identifiers_and_reverses(historical_identifiers):
+    Identifier, parents, add = historical_identifiers
+    for parent in parents:
+        add(parent)
+        add(parent, archived=True)
+        add(parent, archived=True)
+    before = list(Identifier.objects.order_by("pk").values())
+    before_index = identifier_index()
+    executor = MigrationExecutor(connection)
+    assert [m.name for m, backwards in executor.migration_plan([REPLACEMENT])] == [REPLACEMENT[1]]
+    executor.migrate([REPLACEMENT])
+    apps = MigrationExecutor(connection).loader.project_state([REPLACEMENT]).apps
+    CurrentIdentifier = apps.get_model("metadata", "ExternalIdentifier")
+    rows = list(CurrentIdentifier.objects.order_by("pk").values())
+    owners = {parent.pk: parent.department_id for parent in parents}
+    assert [row.pop("department_id") for row in rows] == [
+        owners[row["network_element_id"]] for row in before
+    ]
+    assert rows == before
+    with connection.cursor() as cursor:
+        constraints = connection.introspection.get_constraints(cursor, Identifier._meta.db_table)
+    assert constraints["meta_active_dept_external_identifier"]["unique"]
+    assert constraints["meta_active_dept_external_identifier"]["columns"] == ["department_id", "source", "value"]
+    assert constraints["meta_identifier_element_department"]["foreign_key"]
+    assert INDEX_NAME not in constraints
+
+    from django.db import transaction
+
+    with pytest.raises(IntegrityError) as duplicate_failure, transaction.atomic():
+        CurrentIdentifier.objects.create(
+            network_element_id=parents[0].pk, department_id=parents[0].department_id,
+            source="ERP", value="replacement-pair",
+        )
+    assert duplicate_failure.value.__cause__.sqlstate == "23505"
+    assert duplicate_failure.value.__cause__.diag.constraint_name == "meta_active_dept_external_identifier"
+    with pytest.raises(IntegrityError) as ownership_failure, transaction.atomic():
+        CurrentIdentifier.objects.create(
+            network_element_id=parents[0].pk, department_id=parents[1].department_id,
+            source="ERP", value="wrong-owner",
+        )
+    assert ownership_failure.value.__cause__.sqlstate == "23503"
+    assert ownership_failure.value.__cause__.diag.constraint_name == "meta_identifier_element_department"
+
+    MigrationExecutor(connection).migrate([BASELINE])
+    assert list(Identifier.objects.order_by("pk").values()) == before
+    assert identifier_index() == before_index
+
+
+@pytest.mark.postgis
+@pytest.mark.django_db(transaction=True)
+def test_replacement_rejects_same_department_duplicates_atomically(historical_identifiers):
+    Identifier, parents, add = historical_identifiers
+    Element = type(parents[0])
+    extra = Element.objects.create(
+        department_id=parents[0].department_id,
+        element_type_id=parents[0].element_type_id, name="Second North site",
+    )
+    add(parents[0])
+    add(extra)
+    before = list(Identifier.objects.order_by("pk").values())
+    history = list(MigrationRecorder.Migration.objects.order_by("pk").values())
+    index = identifier_index()
+    with pytest.raises(IntegrityError) as failure:
+        MigrationExecutor(connection).migrate([REPLACEMENT])
+    assert failure.value.__cause__.sqlstate == "23505"
+    assert failure.value.__cause__.diag.constraint_name == "meta_active_dept_external_identifier"
+    assert list(Identifier.objects.order_by("pk").values()) == before
+    assert list(MigrationRecorder.Migration.objects.order_by("pk").values()) == history
+    assert identifier_index() == index
+
+
+@pytest.mark.postgis
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("starting_point", [GLOBAL_UNIQUENESS, TARGET])
+def test_existing_original_migration_history_is_supported(historical_identifiers, starting_point):
+    Identifier, parents, add = historical_identifiers
+    add(parents[0])
+    before = list(Identifier.objects.values())
+    assert REPLACEMENT not in MigrationRecorder(connection).applied_migrations()
+    original_executor().migrate([starting_point])
+    applied = MigrationRecorder(connection).applied_migrations()
+    assert GLOBAL_UNIQUENESS in applied
+    assert (TARGET in applied) == (starting_point == TARGET)
+    assert REPLACEMENT not in applied
+    executor = MigrationExecutor(connection)
+    plan = executor.migration_plan(executor.loader.graph.leaf_nodes())
+    assert [m.name for m, backwards in plan] == ([TARGET[1]] if starting_point == GLOBAL_UNIQUENESS else [])
+    executor.migrate(executor.loader.graph.leaf_nodes())
+    assert REPLACEMENT in MigrationRecorder(connection).applied_migrations()
+    apps = MigrationExecutor(connection).loader.project_state([REPLACEMENT]).apps
+    rows = list(apps.get_model("metadata", "ExternalIdentifier").objects.values())
+    assert [row.pop("department_id") for row in rows] == [parents[0].department_id]
+    assert rows == before
+
+
+@pytest.mark.postgis
+@pytest.mark.django_db(transaction=True)
+def test_fresh_metadata_install_matches_models():
+    from django.apps import apps
+    from django.db.migrations.autodetector import MigrationAutodetector
+    from django.db.migrations.state import ProjectState
+
+    targets = MigrationExecutor(connection).loader.graph.leaf_nodes()
+    try:
+        MigrationExecutor(connection).migrate([("metadata", None)])
+        executor = MigrationExecutor(connection)
+        assert REPLACEMENT in executor.loader.graph.nodes
+        assert GLOBAL_UNIQUENESS not in executor.loader.graph.nodes
+        executor.migrate(targets)
+        executor = MigrationExecutor(connection)
+        changes = MigrationAutodetector(
+            executor.loader.project_state(), ProjectState.from_apps(apps),
+        )._detect_changes()
+        assert "metadata" not in changes
+        with connection.cursor() as cursor:
+            constraints = connection.introspection.get_constraints(cursor, "metadata_externalidentifier")
+        assert "meta_active_dept_external_identifier" in constraints
+        assert "meta_identifier_element_department" in constraints
+    finally:
+        MigrationExecutor(connection).migrate(targets)
