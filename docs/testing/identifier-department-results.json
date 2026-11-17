@@ -1,0 +1,105 @@
+{
+  "date": "2026-11-15",
+  "baseline": "e9c258ffed9e3741b08681efa7d8f6e9331a9da8",
+  "scope": "Department-scoped external identifier privacy regression",
+  "total_backend_passed": 383,
+  "passed_subtests": 18,
+  "department_cases": [
+    {
+      "pytest_node": "metadata/tests/test_identifier_departments.py::test_other_department_identifier_does_not_change_success[editor-POST]",
+      "result": "passed"
+    },
+    {
+      "pytest_node": "metadata/tests/test_identifier_departments.py::test_other_department_identifier_does_not_change_success[editor-PATCH]",
+      "result": "passed"
+    },
+    {
+      "pytest_node": "metadata/tests/test_identifier_departments.py::test_other_department_identifier_does_not_change_success[editor-import]",
+      "result": "passed"
+    },
+    {
+      "pytest_node": "metadata/tests/test_identifier_departments.py::test_other_department_identifier_does_not_change_success[multi-POST]",
+      "result": "passed"
+    },
+    {
+      "pytest_node": "metadata/tests/test_identifier_departments.py::test_other_department_identifier_does_not_change_success[multi-PATCH]",
+      "result": "passed"
+    },
+    {
+      "pytest_node": "metadata/tests/test_identifier_departments.py::test_other_department_identifier_does_not_change_success[multi-import]",
+      "result": "passed"
+    },
+    {
+      "pytest_node": "metadata/tests/test_identifier_departments.py::test_same_department_duplicate_rejects_and_preserves_rows[POST]",
+      "result": "passed"
+    },
+    {
+      "pytest_node": "metadata/tests/test_identifier_departments.py::test_same_department_duplicate_rejects_and_preserves_rows[PATCH]",
+      "result": "passed"
+    },
+    {
+      "pytest_node": "metadata/tests/test_identifier_departments.py::test_same_department_duplicate_rejects_and_preserves_rows[import]",
+      "result": "passed"
+    },
+    {
+      "pytest_node": "metadata/tests/test_identifier_departments.py::test_identifier_validation_cannot_bypass_department_permission[POST]",
+      "result": "passed"
+    },
+    {
+      "pytest_node": "metadata/tests/test_identifier_departments.py::test_identifier_validation_cannot_bypass_department_permission[PATCH]",
+      "result": "passed"
+    },
+    {
+      "pytest_node": "metadata/tests/test_identifier_departments.py::test_identifier_validation_cannot_bypass_department_permission[import]",
+      "result": "passed"
+    },
+    {
+      "pytest_node": "metadata/tests/test_identifier_departments.py::test_database_scopes_uniqueness_and_keeps_archived_history",
+      "result": "passed"
+    },
+    {
+      "pytest_node": "metadata/tests/test_identifier_departments.py::test_database_rejects_identifier_parent_department_mismatch[bulk-create]",
+      "result": "passed"
+    },
+    {
+      "pytest_node": "metadata/tests/test_identifier_departments.py::test_database_rejects_identifier_parent_department_mismatch[change-department]",
+      "result": "passed"
+    },
+    {
+      "pytest_node": "metadata/tests/test_identifier_departments.py::test_database_rejects_identifier_parent_department_mismatch[change-parent]",
+      "result": "passed"
+    },
+    {
+      "pytest_node": "metadata/tests/test_identifier_departments.py::test_database_rejects_identifier_parent_department_mismatch[clear-department]",
+      "result": "passed"
+    },
+    {
+      "pytest_node": "metadata/tests/test_identifier_departments.py::test_nested_department_is_derived_from_parent",
+      "result": "passed"
+    },
+    {
+      "pytest_node": "metadata/tests/test_identifier_departments.py::test_concurrent_different_departments_claim_independently[API]",
+      "result": "passed"
+    },
+    {
+      "pytest_node": "metadata/tests/test_identifier_departments.py::test_concurrent_different_departments_claim_independently[Excel]",
+      "result": "passed"
+    },
+    {
+      "pytest_node": "metadata/tests/test_identifier_departments.py::test_direct_writer_collision_returns_scoped_error_with_rollback[API]",
+      "result": "passed"
+    },
+    {
+      "pytest_node": "metadata/tests/test_identifier_departments.py::test_direct_writer_collision_returns_scoped_error_with_rollback[Excel]",
+      "result": "passed"
+    },
+    {
+      "pytest_node": "metadata/tests/test_identifier_departments.py::test_migration_backfills_active_and_archived_identifiers_without_data_loss",
+      "result": "passed"
+    },
+    {
+      "pytest_node": "metadata/tests/test_identifier_departments.py::test_reverse_migration_refuses_global_collision_without_changing_data",
+      "result": "passed"
+    }
+  ]
+}
