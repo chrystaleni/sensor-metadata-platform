@@ -122,7 +122,14 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Department and access adapters are supplied by the shared security layer.
 METADATA_DEPARTMENT_MODEL = os.environ.get("METADATA_DEPARTMENT_MODEL", "local_departments.Department")
-METADATA_PLATFORM_DEPARTMENT_ID = int(os.environ.get("METADATA_PLATFORM_DEPARTMENT_ID", "1"))
+# An unset or invalid ID leaves shared catalogs unavailable.
+try:
+    _platform_department_id = int(os.environ.get("METADATA_PLATFORM_DEPARTMENT_ID", ""))
+except ValueError:
+    _platform_department_id = 0
+METADATA_PLATFORM_DEPARTMENT_ID = (
+    _platform_department_id if 0 < _platform_department_id < 2**63 else None
+)
 METADATA_ACCESS_POLICY = os.environ.get("METADATA_ACCESS_POLICY", "metadata.access.NoAccessPolicy")
 GDAL_LIBRARY_PATH = os.environ.get("GDAL_LIBRARY_PATH")
 GEOS_LIBRARY_PATH = os.environ.get("GEOS_LIBRARY_PATH")
