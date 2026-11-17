@@ -22,7 +22,7 @@ The backend framework was changed from FastAPI to Django following a client requ
 
 ## Architecture
 
-The system follows a three-tier modular monolith architecture: a React/Vite frontend, a Django backend organized around the three problem domains, and a PostgreSQL/PostGIS data tier. GeoDjango will support spatial functionality. The tiers are developed and run together as one application system.
+The system follows a three-tier modular monolith architecture: a React/Vite frontend, a Django backend organized around the three problem domains, and a PostgreSQL/PostGIS data tier. GeoDjango provides the implemented spatial fields and validation. The tiers are developed and run together as one application system.
 
 ## Team responsibilities
 
@@ -106,6 +106,18 @@ The metadata models and migrations require PostgreSQL/PostGIS. Use the PostGIS c
 The unauthenticated `GET /health/` endpoint returns HTTP 200 with `{"status": "ok"}`.
 
 Stop Docker without deleting the database data with `docker compose stop db` or `docker compose down`. To intentionally delete the data volume, run `docker compose down --volumes` from the repository root.
+
+## Metadata integration configuration
+
+The metadata API defaults to `metadata.access.NoAccessPolicy`. A session alone does not grant metadata access; Chrystaleni's adapter supplies Department scopes and shared-list management permission. The current project does not register login/logout or an explicit CSRF-bootstrap URL.
+
+PR #31 changes `METADATA_PLATFORM_DEPARTMENT_ID` from an implicit ID 1 to explicit configuration. With that change present, set the approved existing Platform Department ID in the root `.env`. Missing, invalid, non-positive or out-of-range values leave Platform unconfigured. A setting does not create a Department, move catalog values or grant access.
+
+The optional demo fixtures use Platform ID 1 only in an empty isolated demo database. Do not infer the shared Platform ID from those fixture values. Operational data belongs to its selected business Department; shared catalog values belong to Platform.
+
+`METADATA_DEPARTMENT_MODEL` defaults to `local_departments.Department`. Agree the shared model and migration strategy before using a shared database. `METADATA_ACCESS_POLICY` must point to the team's real installed adapter for authorized metadata workflows.
+
+See the [API contract and permission boundary](docs/development/argyris-api-examples.md), [backend handover](docs/development/argyris-backend.md) and [database upgrade runbook](docs/development/argyris-database.md). PR #31 and the PR #32 replacement migration were still separate open PRs at the 17 November 2026 review; verify which revision is checked out before following their new behavior.
 
 ## Continuous integration
 
