@@ -79,8 +79,36 @@ This is a concise reconstructed specification from the user's assignment and sub
 | Changes/corrections | A corrupt DEFLATE member reproduced an uncaught zlib.error/HTTP 500. The existing XLSX unreadable-file handler now catches that exception and returns its documented 400 error. Corrected the API example to DRF 3.18's indexed object error format and documented 405/415 and import request-vs-row error shapes. |
 | Related deliverables | Error catalog and JSON observations, executable tests and JUnit evidence. GitHub CI must be observed separately after publishing; local results do not assert remote success. |
 
+## Entry 14 - Department-scoped identifier privacy correction
+
+| Field | Record |
+| --- | --- |
+| Team member / AI tool | Argyris Fellas / Codex |
+| Date and phase | 15 November 2026; Privacy refinement and integration |
+| Prompt summary | Scope external-system identifier uniqueness to the target Department, add a new migration without editing existing ones, align API/Excel validation and test isolation before attempting the requested merge. |
+| Inspection | BE-05 requires rejecting same-system duplicates but does not explicitly define a global namespace. Existing global checks returned 400 for a hidden Department's identifier in six reproduced POST/PATCH/import cases. |
+| Changes | Added/backfilled identifier Department ownership, a conditional Department/source/value unique index and matching-parent composite FK in 0005. Scoped serializer validation and bulk inserts; Excel reuses that path. Preserved nested request/response and PATCH semantics. |
+| Validation | 24 dedicated isolation, permission, database, concurrency and migration regressions; full local suite 383 passed and 18 subtests passed on Python 3.13.18/PostGIS. Dependency/system/migration checks passed; old migrations remained byte-identical. |
+| Refinement | Updated previous global-conflict tests to same-Department conflicts, retained independent direct-writer collision coverage and documented downgrade refusal after cross-Department reuse. |
+| Boundary | No shared schema/role redesign, frontend/workflow change or shared-database migration. Remote CI and repository review requirements are checked separately before any merge; no teammate approval is invented. |
+
 ## Review boundaries
 
 Follow-up on 14 November: Codex reproduced and corrected missing nested source/value fields on PATCH, preserving stored data and unrelated PATCH semantics. Inspection of SEC-03 then identified the explicit 403/404 distinction, which was aligned in the existing operational views. The final local suite used Python 3.13.18 and passed 39 tests plus 18 subtests. The API guide, validation mapping and shared integration handover were updated using the observed code and results. These are further refinements of entries 11-12; no teammate approval or new security implementation is claimed.
 
 The supplied logs reflect earlier project stages and an older FastAPI choice; the official repository and current backend assignment use Django. The approved final Phase 1/2 report and client workbook were not supplied. The implementation follows the actual current issue criteria and available domain decisions. ARCH-01 review must settle endpoint/workbook approval, shared Department migrations and authorization integration. No meetings, teammate approvals, client acceptance, production deployment or Blackboard submission are invented in this log.
+
+## 17 November - Backend readiness and documentation completion
+
+| Field | Recorded evidence |
+| --- | --- |
+| Member / tool | Argyris Fellas / Codex |
+| Purpose | Verify the merged metadata backend and existing PR #31/#32 changes; complete API, migration, configuration and integration documentation. |
+| Specification | Inspect the actual source, avoid duplicate features/authentication, retain default deny and existing PATCH/Excel behavior, test on isolated PostGIS, distinguish implemented behavior from pending team integration, and publish only the authorized backend documentation. |
+| Inspection | Verified all 82 main Git blobs and eight PR-changed blobs. Reviewed main `2f97a90c`, PR #31 code `aa743dd6`, PR #32 code `e4fa5de5` and newer frontend `43f109f`. |
+| Generate / inspect / refine | Prepared separate migration runbook, exact API contract and Platform setup changes. Refreshed old review wording as historical, retained previous evidence, and updated the frontend audit after discovering its newer revision. |
+| Backend validation | Main: 387 tests + 18 subtests. Combined existing PR changes: 403 tests + 20 subtests, zero failures/errors/skips. Dependencies, Django checks, isolated migrations and model/migration consistency passed on Python 3.13.18, Django 5.2.19, PostgreSQL 16.15/PostGIS 3.4.6. Temporary server stopped afterward. |
+| Documentation validation | JSON examples, internal links, field/router inspection and clean patch application checked before publication. No schema generator dependency added. |
+| Frontend findings | Read-only probes of its exact helper modules confirm correct CSRF inclusion but four mismatches: `department_id` instead of `department`; rejecting the valid 201/created response; omitting top-level Department errors; and losing nested workbook field names. These remain Antri's integration changes. |
+| Publication | GitHub connector writes returned integration-permission 403 and the local CLI lacked credentials. The existing signed-in GitHub web session was used to publish small documentation commits to the already-open PR #31/#32 branches as ArgyrisFellas. |
+| Boundary | No frontend, real authentication/Organisation model, existing migration or workflow was edited. No teammate approval, PR merge, shared-database migration or Blackboard submission is claimed. |

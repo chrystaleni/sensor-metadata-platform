@@ -290,6 +290,66 @@ class MetadataAPITests(APITestCase):
         self.client.force_authenticate(user=None)
         self.assertIn(self.client.get(f"{API}physical-devices/").status_code, (401, 403))
 
+    def test_missing_or_nonexistent_platform_does_not_use_customer_department_one(self):
+        customer = Organisation.objects.get(code="demo")
+        Department.objects.filter(pk=1).update(name="Customer Department", organisation=customer)
+        catalog_path = f"{API}physical-device-types/"
+        existing_pk = self.catalog["device_type"]
+        existing_name = PhysicalDeviceType.objects.get(pk=existing_pk).name
+
+        for platform_id in (None, 42):
+            with (
+                self.subTest(platform_id=platform_id),
+                override_settings(METADATA_PLATFORM_DEPARTMENT_ID=platform_id),
+            ):
+                self.client.force_authenticate(self.manager)
+                response = self.client.get(catalog_path)
+                self.assertEqual(response.status_code, 403, response.data)
+                self.assertIn("detail", response.data)
+                self.assertEqual(self.post("physical-device-types", {"name": "Pump"}).status_code, 403)
+                response = self.client.get(f"{catalog_path}{existing_pk}/")
+                self.assertEqual(response.status_code, 403, response.data)
+                self.assertIn("detail", response.data)
+                self.client.force_authenticate(self.editor)
+                response = self.post("physical-devices", {
+                    "department": 2, "name": "Invalid", "device_type": existing_pk,
+                })
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("device_type", response.data)
+
+        self.assertEqual(list(PhysicalDeviceType.objects.values_list("department_id", "name")), [(1, existing_name)])
+        self.assertFalse(PhysicalDevice.objects.exists())
+
+    @override_settings(METADATA_PLATFORM_DEPARTMENT_ID=42)
+    def test_explicit_platform_department_is_used_for_catalog_ownership_and_relationships(self):
+        customer = Organisation.objects.get(code="demo")
+        Department.objects.filter(pk=1).update(name="Customer Department", organisation=customer)
+        platform = Organisation.objects.get(code="platform", name="Platform")
+        Department.objects.create(pk=42, name="Platform", organisation=platform)
+        for model in (MeasurementType, MeasurementUnit, PhysicalDeviceType, NetworkElementType):
+            model.objects.filter(department_id=1).update(department_id=42)
+        self.client.force_authenticate(self.manager)
+        response = self.post("physical-device-types", {"name": "Pump"})
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["department"], 42)
+        catalog_item = PhysicalDeviceType.objects.get(pk=response.data["id"])
+        self.assertEqual(catalog_item.department_id, 42)
+
+        self.client.force_authenticate(self.editor)
+        response = self.client.get(f"{API}physical-device-types/")
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["count"], 2)
+        self.assertEqual(
+            {item["id"] for item in response.data["results"]},
+            {self.catalog["device_type"], catalog_item.pk},
+        )
+        self.assertEqual(Department.objects.get(pk=1).organisation_id, customer.pk)
+        self.assertEqual(list(Department.objects.filter(organisation=platform).values_list("pk", flat=True)), [42])
+        response = self.post("physical-devices", {
+            "department": 2, "name": "Pump station", "device_type": catalog_item.pk,
+        })
+        self.assertEqual(response.status_code, 201, response.data)
+
     def test_catalog_is_shared_and_only_manager_writes(self):
         rogue = PhysicalDeviceType.objects.create(department_id=3, name="Non-platform type")
         self.assertEqual(self.client.get(f"{API}physical-device-types/").status_code, 403)
@@ -449,7 +509,7 @@ class MetadataAPITests(APITestCase):
         self.assertEqual(self.client.get(f"{API}physical-devices/?device_type=0").status_code, 400)
         self.assertEqual(self.client.get(f"{API}physical-devices/?device_type=999").json()["count"], 0)
 
-    def test_identifiers_are_unique_per_external_system_across_elements(self):
+    def test_identifiers_are_unique_within_department_per_external_system(self):
         first = self.post("network-elements", {
             "department": 2, "name": "First", "element_type": self.catalog["element_type"],
             "external_identifiers": [{"source": "ERP", "value": "asset-101"}],
@@ -457,7 +517,7 @@ class MetadataAPITests(APITestCase):
         self.assertEqual(first.status_code, 201, first.data)
         self.client.force_authenticate(self.multi)
         duplicate = self.post("network-elements", {
-            "department": 3, "name": "Duplicate", "element_type": self.catalog["element_type"],
+            "department": 2, "name": "Duplicate", "element_type": self.catalog["element_type"],
             "external_identifiers": [{"source": "ERP", "value": "asset-101"}],
         })
         self.assertEqual(duplicate.status_code, 400, duplicate.data)
@@ -771,10 +831,10 @@ class MetadataConcurrencyTests(APITransactionTestCase):
                         ("Concurrent", element_type, '[{"source":"ERP","value":"concurrent-101"}]'),
                     ]})
                     return client.post(
-                        f"{API}imports/excel/", {"department": 3, "file": workbook}, format="multipart",
+                        f"{API}imports/excel/", {"department": 2, "file": workbook}, format="multipart",
                     )
                 return client.post(f"{API}network-elements/", {
-                    "department": 3, "name": "Concurrent", "element_type": element_type,
+                    "department": 2, "name": "Concurrent", "element_type": element_type,
                     "external_identifiers": [pair],
                 }, format="json")
             finally:
@@ -797,7 +857,7 @@ class MetadataConcurrencyTests(APITransactionTestCase):
                             break
                     sleep(0.02)
                 else:
-                    self.fail("The duplicate identifier did not wait for the competing transaction.")
+                    self.fail("The duplicate identifier did not wait for its Department's competing write.")
             response = pending.result(timeout=5)
         self.assertEqual(response.status_code, 400, response.data)
         if importing:

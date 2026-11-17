@@ -121,18 +121,30 @@ class NetworkElement(DepartmentRecord):
 
 
 class ExternalIdentifier(MetadataRecord):
+    department = models.ForeignKey(
+        settings.METADATA_DEPARTMENT_MODEL, on_delete=models.PROTECT, related_name="+", editable=False,
+    )
     network_element = models.ForeignKey(
         NetworkElement, on_delete=models.PROTECT, related_name="external_identifiers"
     )
     source = models.CharField(max_length=120)
     value = models.CharField(max_length=255)
 
+    def save(self, *args, **kwargs):
+        # Ordinary ORM creation derives ownership from the parent. Bulk writers
+        # supply it explicitly; the composite database FK enforces agreement.
+        if self.department_id is None and self.network_element_id is not None:
+            self.department_id = self.network_element.department_id
+            if kwargs.get("update_fields") is not None:
+                kwargs["update_fields"] = {*kwargs["update_fields"], "department"}
+        super().save(*args, **kwargs)
+
     class Meta(MetadataRecord.Meta):
         constraints = [
             models.UniqueConstraint(
-                fields=("source", "value"),
+                fields=("department", "source", "value"),
                 condition=models.Q(deleted_at__isnull=True),
-                name="meta_active_external_identifier",
+                name="meta_active_dept_external_identifier",
             ),
         ]
 

@@ -1,8 +1,8 @@
 # Backend contribution by Argyris Fellas
 
-Recorded on 13 November and updated on 14 November 2026. This branch implements the backend areas of BE-01 through BE-08 against the existing Django project and PostGIS configuration.
+Recorded on 13 November and reviewed on 17 November 2026. PR #27's BE-01 through BE-08 metadata implementation is merged into main at `2f97a90c`. PRs #31 and #32 are included in the main revision integrated here (`65d35dee3d4d9370b52a1c47122b419bf57b8955`). Organisation functionality described below belongs to this integration branch and is not asserted to be published on main.
 
-The backend contribution is complete for review under BE-01 through BE-08. The shared Department schema and access adapter, the final API contract under ARCH-01 (#9), and workbook-column approval remain team integration decisions before merge and deployment.
+The metadata features are implemented. The shared Department schema and access adapter, the final API contract under ARCH-01 (#9), and workbook-column approval remain team integration decisions before shared deployment.
 
 ## Delivery contents
 
@@ -31,17 +31,23 @@ METADATA_DEPARTMENT_MODEL selects the Department model. The current default loca
 
 METADATA_ACCESS_POLICY selects the team's authorization adapter. It supplies readable_department_ids(request), writable_department_ids(request), and can_manage_controlled_lists(request). The default NoAccessPolicy denies metadata access. The APIs use DRF SessionAuthentication and Django's existing user model. The test-only FixturePolicy supplies synthetic department access for automated tests.
 
-After migrations, run from `backend/`:
+`METADATA_PLATFORM_DEPARTMENT_ID` must explicitly select the approved Platform Department. Missing, malformed, non-positive or out-of-range values are unconfigured; there is no default Department ID. The setting itself neither creates a Department nor reassigns existing catalogs.
+
+The following provisioning instructions apply to this Organisation integration branch, not to Organisation functionality already published on main. On existing installations, complete the approved Organisation backfill before provisioning. Preserve existing Department primary keys, metadata relationships and catalog ownership; do not replace Departments or move records to make configuration match.
+
+After the Organisation migrations and approved backfill, run from `backend/`:
 
 ```sh
 python manage.py provision_platform_department
 ```
 
-Copy the printed `METADATA_PLATFORM_DEPARTMENT_ID=<id>` line into the deployment environment or the local repository-root `.env`, then restart the backend. Use the printed ID for that database. There is no default owner. On repeat runs, the command returns the existing Department in Organisation `platform`, including an existing owner with a different display name. It rejects multiple Departments in that Organisation, a configured ID that disagrees, or rows in any shared controlled list owned by another Department. Resolve those conflicts with the data owner before retrying. The command preserves existing catalog and metadata links.
+Copy the printed `METADATA_PLATFORM_DEPARTMENT_ID=<id>` line into the deployment environment or repository-root `.env`, then restart the backend. Use the ID returned for that database. On repeat runs, the command returns the existing Department in Organisation `platform`, including an existing owner with a different display name. It rejects an Organisation identity mismatch, multiple Departments in that Organisation, a configured ID that disagrees, or rows in any shared controlled list owned by another Department. Resolve conflicts with the data owner before retrying. The command preserves existing Department IDs, catalog records and metadata links.
 
-Catalog operations and writes that need catalog references require a valid configured owner. Existing scoped operational reads can still work while configuration is corrected.
+Catalog operations and writes that need catalog references require a valid configured owner. For otherwise-authorized catalog readers, an unconfigured or invalid Platform owner returns HTTP 403 for list and detail requests and prevents catalog writes/selections. Default-deny users retain empty lists and hidden details. Existing scoped operational reads can still work while configuration is corrected. Session authentication alone grants no access: the default NoAccessPolicy remains in effect until the real authorization adapter is explicitly integrated.
 
-For an isolated demo database, the alternative setup is to load `demo_departments` and `demo_catalog` **before** running the command. The fixtures use fixed Department IDs 1 and 2. Run the command to validate the fixture owner and obtain that database's configuration value.
+The optional `demo_departments` and `demo_catalog` fixtures use fixed IDs 1 and 2 only in an empty isolated demo database. Their Platform ID 1 is not evidence of the correct owner in another database. Do not load them into an existing installation. This Organisation branch provides Organisation-aware demo Departments; for an empty isolated demo database, load demo_departments and demo_catalog before provisioning. Run the command to verify the fixture owner and obtain that database's configuration value.
+
+See the [API guide](argyris-api-examples.md) for current/pending authentication behavior and the [database migration runbook](argyris-database.md) for source-revision and shared-model prerequisites.
 
 Authentication, real role rules, membership and API keys remain integration dependencies on SEC-01 through SEC-04. The code's callbacks are an implementation proposal for that integration.
 
@@ -49,7 +55,7 @@ Authentication, real role rules, membership and API keys remain integration depe
 
 The prefix is /api/v1/. Collections are measurements/, physical-devices/, network-elements/, measurement-types/, measurement-units/, physical-device-types/ and network-element-types/. POST creates a record. GET lists records. GET, PUT, PATCH and DELETE operate on {id}/. DELETE returns 204 after archiving, or 409 if active dependent records exist. Default queries exclude archived records.
 
-Requests use integer relationship IDs. The department ID is required on create and cannot be reassigned. Every Measurement requires physical_device, network_element, measurement_type and measurement_unit. Relationship selections must be active and in the selected Department or the Platform shared list as appropriate.
+Requests use integer relationship IDs. An operational record's department ID is required on create and cannot be reassigned; controlled-list ownership is server-assigned. Every Measurement requires physical_device, network_element, measurement_type and measurement_unit. Relationship selections must be active and in the selected Department or the Platform shared list as appropriate.
 
 Responses include id, department, name, description, created_at, updated_at, created_by, updated_by and is_active. List responses contain count, next, previous and results. Validation errors use DRF's field-keyed messages. Authenticated users receive 403 for unauthorized creation. Out-of-scope detail records return 404.
 
@@ -59,7 +65,7 @@ List parameters include search, ordering, page, page_size and relationship field
 
 Controlled-list reads can include archived values using include_inactive=true. Such values are returned with is_active=false and cannot be chosen on metadata writes.
 
-Network element external_identifiers accepts objects with source and value. An update containing this list replaces the active list, preserving unchanged pairs and archiving removals. Active `(source, value)` pairs are unique across Network Elements, including across Departments, as required by BE-05's external-system duplicate rule. Comparisons use exact strings. An archived pair remains in history and may be reused. Duplicate responses expose no other record or Department details. General text search includes active identifier sources and values; retired identifiers are excluded.
+Network element external_identifiers accepts objects with source and value. An update containing this list replaces the active list, preserving unchanged pairs and archiving removals. Active `(source, value)` pairs are unique across Network Elements within the selected Department. The same pair is allowed in another Department, and duplicate validation does not inspect other Departments. Migration 0005 adds and backfills ownership, enforces matching parent ownership and replaces the global constraint; existing migrations are unchanged. Comparisons use exact strings. An archived pair remains in history and may be reused. General text search includes active identifier sources and values; retired identifiers are excluded. See the [Department identifier handover](pr27-identifier-departments.md) for the clarified rule and tests.
 
 ## Proposed workbook format
 
@@ -79,19 +85,29 @@ Generate the exact implemented headers with `python manage.py metadata_workbook 
 
 ## Validation performed
 
-The final 14 November integrated project checks used Python 3.13.18, Django 5.2.19, PostgreSQL 16.15, PostGIS 3.4.6 and GDAL 3.12.4.
+The historical 15 November integrated project checks used Python 3.13.18, Django 5.2.19, PostgreSQL 16.15, PostGIS 3.4.6 and GDAL 3.12.4.
 
 - Django system check reported no issues.
 - All migrations were applied to the disposable database.
 - makemigrations --check --dry-run reported no changes.
-- python -m pytest -v reported 359 passed and 18 passed subtests, including the original 39 tests and 320 added error/boundary/session tests.
-- Tests exercise Excel rollback, department scope, optional account/model identifiers, inactive controlled values, audit attribution, concurrent parent/catalog archival and concurrent identifier collisions across Departments.
+- python -m pytest -v reported 383 passed and 18 passed subtests, including the previous 359 tests and 24 Department-identifier regressions.
+- Tests exercise Excel rollback, Department scope, optional account/model identifiers, inactive controlled values, audit attribution and concurrent parent/catalog archival. Identifier tests reject same-Department collisions, permit independent claims across Departments and verify migration backfill/downgrade integrity.
 - The generated example workbook was imported through the actual API and linked all three domains successfully.
 - Read-only update/deactivation returns 403 for all three domains without changing stored data; cross-Department access still returns 404.
 
 Run the same checks from backend/ using the documented PostGIS environment. The existing GitHub Actions workflow also checks for missing migrations.
 
 The [individual error catalog](../testing/backend-error-catalog.md) documents 310 separately executable error cases with input, HTTP/error expectations and preservation assertions. The other ten new tests cover accepted boundaries, pagination fallbacks, audit fields, workbook generation and a real session/CSRF exchange. A corrupt compressed workbook regression exposed an uncaught zlib error; the existing workbook handler now returns its standard 400 file error. No model, migration, frontend or CI workflow changed in this error audit.
+
+### 17 November verification
+
+Published main `2f97a90c` passes 387 tests and 18 subtests. PR #31 `aa743dd6` passes 397 tests and 20 subtests; PR #32 `e4fa5de5` passes 393 tests and 18 subtests in their completed GitHub Actions runs.
+
+A separate local verification copied all 82 main files after checking their Git blob hashes, overlaid the eight verified PR #31/#32 changed files, and ran against a new disposable PostgreSQL 16.15/PostGIS 3.4.6 cluster using Python 3.13.18 and Django 5.2.19. Main passed 387 tests plus 18 subtests; the combined snapshot passed 403 tests plus 20 subtests, with zero failures/errors/skips. Dependency checks, Django checks, migrations and model/migration consistency passed. The server was stopped after validation. This combined local result is not a GitHub Actions result for a merged revision.
+
+Completed CI evidence: [main](https://github.com/chrystaleni/sensor-metadata-platform/actions/runs/44108479433), [PR #31](https://github.com/chrystaleni/sensor-metadata-platform/actions/runs/44115739167), [PR #32](https://github.com/chrystaleni/sensor-metadata-platform/actions/runs/44134065018).
+
+Real authentication/Organisation integration and frontend end-to-end workflows remain unverified in the published implementation. A green metadata suite does not substitute for those owner-provided components.
 
 ## AI development evidence
 

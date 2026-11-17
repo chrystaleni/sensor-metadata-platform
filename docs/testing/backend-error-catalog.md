@@ -1,6 +1,6 @@
 # Backend error contract and individual regression tests
 
-Argyris Fellas. Generated 2026-11-14 from executable cases and a passing local JUnit report.
+Argyris Fellas. Generated 2026-11-15 from executable cases and a passing local JUnit report.
 
 This catalog records **310 individual error cases**: 259 REST cases, 33 Excel cases, 14 database cases and 4 command errors. Additional positive/boundary and session tests are listed below. The pre-existing CRUD, permission and concurrency tests remain enabled.
 
@@ -18,11 +18,13 @@ The generator refuses failing, skipped or missing case results. It does not chan
 
 ## Fixtures, error shapes and integrity assertions
 
-POST cases start from a valid request; PATCH cases start from existing records. `changes` replaces the shown fields. `$omit` removes a field. Other `$tokens` resolve to real database IDs: types/units belong to Platform, operational parents to Department 2, and `$other_*` references belong to Department 3. `archive:field` archives that reference before taking the snapshot. The actor is an authenticated editor unless the row says otherwise; catalogs use catalog-manager for writes. The fixture has a linked Measurement, Device, Network Element, an existing ERP identifier and another Department's claimed identifier.
+POST cases start from a valid request; PATCH cases start from existing records. `changes` replaces the shown fields. `$omit` removes a field. Other `$tokens` resolve to real database IDs: types/units belong to Platform, operational parents to Department 2, and `$other_*` references belong to Department 3. `archive:field` archives that reference before taking the snapshot. The actor is an authenticated editor unless the row says otherwise; catalogs use catalog-manager for writes. The fixture has a linked Measurement, Device, Network Element, an existing ERP identifier and another Network Element's claimed identifier in the same Department.
 
 Every negative API/import case compares all nine Department/metadata tables before and after the request, including inactive identifiers, audit actors, timestamps, JSON and geometry. Database cases use real SQL/ORM failures inside savepoints and make the same comparison. CLI errors preserve existing file contents. PostgreSQL sequences may advance on rolled-back inserts; sequence values are not business records.
 
 Field errors are field-keyed JSON. Nested identifier errors identify the item index (DRF 3.18 uses object keys such as `"0"`; older DRF releases use lists). Workbook parsing/row errors use `errors: [{sheet, row, errors}]`; invalid/missing multipart request fields use ordinary field-keyed JSON. Authentication/permission/method/conflict errors have `detail`. Human messages are serialized; DRF's internal ErrorDetail codes are not additional response JSON fields.
+
+Identifier uniqueness is Department-scoped after migration 0005. The duplicate fixture uses another element in the same Department; claims in other Departments must not trigger a duplicate error. The [Department identifier handover](../development/pr27-identifier-departments.md) records the 24 dedicated isolation/concurrency/migration regressions and their exact test IDs.
 
 ## REST errors
 
@@ -427,15 +429,15 @@ Excel limits are 5 MiB uploaded, 25 MiB expanded, 200 ZIP members and 2000 works
 | Existing `test_linked_crud_archival_and_dependencies` | Create/read/update/archive all three domains; six dependency conflicts; protected physical deletion and audit actors. |
 | Existing identifier PATCH/history tests | Valid/omitted/empty lists, missing source/value/mixed list, stable retained IDs, archived history and atomic rejection. |
 | Existing scope/default-deny/catalog tests | Read-only 403 on PATCH/DELETE across three domains; out-of-scope details 404; default deny, scoped search, catalog management and historical references. |
-| Existing PostGIS/constraint tests | Cross-Department composite foreign keys, unsupported Network geometry and active external-system identifier uniqueness. |
+| Existing PostGIS/constraint tests | Cross-Department composite foreign keys, unsupported Network geometry and Department-scoped active external-system identifier uniqueness. |
 | Existing Excel workflows | Linked three-domain import, generated example, optional accounts/config, wrong-Department references, late invalid row and duplicate identifier rollback. |
-| Existing four concurrency tests | Measurement creation waits for Device/catalog archive; racing identifier API/import writers receive 400 and preserve integrity. |
+| Existing four concurrency tests | Measurement creation waits for Device/catalog archive; racing identifier API/import writers in one Department receive 400 and preserve integrity. |
 | `core/tests/test_health.py`, `core/tests/test_database.py` | GET health status/JSON and actual PostGIS engine/extension query. |
 
 Exact existing names and node IDs are in the JUnit report and [acceptance mapping](argyris-backend-validation.md).
 
 ## Reproduced defect and scope limits
 
-`XLSX-corrupt-deflate` first reproduced an uncaught `zlib.error` and HTTP 500. The only production change in this audit adds that concrete decompression exception to the existing unreadable-workbook handler. It now returns the existing file error with HTTP 400. No endpoint, schema, migration, frontend or CI workflow changed.
+`XLSX-corrupt-deflate` first reproduced an uncaught `zlib.error` and HTTP 500. The only production change in the 14 November error audit adds that concrete decompression exception to the existing unreadable-workbook handler. It now returns the existing file error with HTTP 400. No endpoint, schema, migration, frontend or CI workflow changed.
 
 FixturePolicy supplies synthetic scopes through the existing adapter. This catalog verifies backend enforcement, an actual Django session/CSRF exchange and default-deny behavior; it does not implement or certify the team's future login endpoint, API keys, production User-Department membership or role adapter. The Department integration decision remains in the [shared handover](../development/pr27-shared-integration.md). Unexpected server/database outages and an invalid administrator-supplied adapter path are operational failures, not invented client 400 responses. The suite exercises the enumerated contracts and boundaries; it is not a claim to test every possible file or third-party library exception.

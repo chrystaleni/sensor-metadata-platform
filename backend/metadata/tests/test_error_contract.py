@@ -66,7 +66,8 @@ def scenario(db, settings):
     ExternalIdentifier.objects.create(network_element=element, source="ERP", value="existing")
     other_device = PhysicalDevice.objects.create(department_id=3, name="Other device", device_type_id=catalog["device_type"])
     other_element = NetworkElement.objects.create(department_id=3, name="Other element", element_type_id=catalog["element_type"])
-    ExternalIdentifier.objects.create(network_element=other_element, source="OTHER", value="claimed")
+    claimed_element = NetworkElement.objects.create(department_id=2, name="Local claim", element_type_id=catalog["element_type"])
+    ExternalIdentifier.objects.create(network_element=claimed_element, source="OTHER", value="claimed")
     tokens = {**catalog, "physical_device": device.pk, "network_element": element.pk,
               "other_physical_device": other_device.pk, "other_network_element": other_element.pk}
     for name in CATALOGS.values():
