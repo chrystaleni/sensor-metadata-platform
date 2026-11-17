@@ -1,5 +1,61 @@
 # PR #27 backend integration review
 
+## Current verification on 17 November 2026
+
+PR #27 is merged into main `2f97a90c`. The original review notes below describe earlier states; their old test totals and pre-merge observations are historical.
+
+Code reviewed for the pending follow-ups: PR #31 `aa743dd6` (explicit Platform configuration) and PR #32 `e4fa5de5` (replacement migration and upgrade compatibility). Main passes 387 tests plus 18 subtests. A separate local snapshot combining both follow-ups passes **403 tests plus 20 subtests**, with zero failures, errors or skips on isolated PostgreSQL 16.15/PostGIS 3.4.6 and Python 3.13.18. Dependencies, Django checks, fresh migration application and model/migration consistency pass. The temporary server was stopped.
+
+The [API reference](argyris-api-examples.md), [PR #32 upgrade runbook](https://github.com/chrystaleni/sensor-metadata-platform/blob/28e223fcb449c2f556f30d6351e9dd1070593084/docs/development/argyris-database.md), [backend handover](argyris-backend.md) and [validation mapping](../testing/argyris-backend-validation.md) provide the current metadata contract and evidence. The migration documentation update is published on PR #32 as `28e223f`; its completed [CI run](https://github.com/chrystaleni/sensor-metadata-platform/actions/runs/44165611170) is successful. PRs #31/#32 still require the team's normal review/merge process; no approval or shared migration is implied.
+
+### Frontend compatibility audit
+
+The newer `Frontend` branch at `43f109f1ec9a2254b1feb9f4cfe71e84bb16a770` supersedes the earlier `646fa8d` inspection. Native Git exposed this new revision before the cached PR metadata updated. The new frontend adds a Department input, CSRF helper and geometry validation refinements. Metadata CRUD remains local demo state, and four real-contract Excel mismatches remain.
+
+| Frontend file/function | Expected backend contract | Observed frontend behavior / cause | Required change / owner |
+| --- | --- | --- | --- |
+| `frontend/src/feall/App.jsx`: `loadRecords`, `Catalog.save` | GET/POST/PATCH operational resources | LocalStorage/state and `demo-*` IDs; no metadata fetch in App | Use real API persistence and returned IDs. Antri |
+| Same: `Catalog` | `results/count/next/previous`, server queries | Local array search/filter/sort/page slicing | Send supported query parameters and consume paginated responses. Antri |
+| `data.js`: `definitions` | Numeric relationship/catalog IDs | Hardcoded type/unit strings and demo Device/Network IDs | Load active catalogs/parents and map IDs/labels. Antri |
+| `data.js`: `validateRecord` | Operational names need not be unique; identifier pairs are Department-scoped | Demo name/external-ID uniqueness differs from server rules | Align form validation with the server and display its field errors. Antri |
+| App/form DTOs | `description`, `customer_account`, `meter_account`, `dma_model_id`, `strategic_model_id`, `external_identifiers` | CamelCase/demo fields have no server mapper | Add explicit request/response mapping; parse identifier text to source/value objects. Antri |
+| App/form DTOs | Server ID; existing model fields only | Generic `externalId` and `manufacturer` have no matching contract field | Agree presentation; do not assume new backend storage. Antri, contract acceptance Chrystaleni |
+| `MapPicker.jsx`, `mapUtils.js`: `buildMapFeatures` | Device `location` / Network `geometry` GeoJSON objects | Root latitude/longitude, separate geometryType and JSON text | Map GeoJSON objects in both directions and preserve lon/lat order. Antri |
+| `App.jsx`: `changeStatus` | DELETE/204, 409 active dependency conflict; readonly `is_active` | Local active flags rather than an API lifecycle | Call DELETE, handle 409 and agree any unsupported history/restore UI. Antri / Chrystaleni |
+| App catalog/config screens | Persisted catalogs and Measurement `data_collection_config` | Catalog placeholders and no collection-settings editor | Complete screens using existing resources/fields. Antri |
+| `ExcelPage.jsx`, `excelImport.js`: `createImportRequest` | Multipart `file` + `department` | Sends `file` + `department_id`; wrong key causes a missing-department 400 | Rename the multipart field to `department` and update its regression assertion. Antri |
+| `excelImport.js`: `importSucceeded` | HTTP 201 with `{"created":{...}}` | Requires invented success/status flags; valid backend success returns false | Recognize the implemented 201/created response and show its counts. Antri |
+| `excelErrors.js`: `groupedImportErrors` / `extractImportErrors` | Top-level field errors and `errors[].errors` | Missing-department body produces no rows; nested row field displays as an em dash | Flatten both actual DRF envelopes, including identifier indices. Antri |
+| `frontend/.env.example` | `/api/v1/imports/excel/` | Example still uses `/api/import/` | Correct the configured URL. Antri |
+| `ExcelPage.jsx` / App | Refetch after import 201 | No refresh of persisted catalog lists; the overall records are still demo state | Refresh affected API data after confirmed success. Antri |
+| `AppLayout.jsx`, settings/origin integration | Real session, permitted Department selection, role-aware UI | Preview identity/manual ID; no integrated login/membership context | Wire the agreed security interface and same-origin or credentialed CORS/CSRF setup. Chrystaleni + Antri |
+
+Specific DTO mappings: `type` becomes `measurement_type`, `device_type` or `element_type` as appropriate; `unit` becomes `measurement_unit`; `device/network` become `physical_device/network_element`; `details` becomes `description`; `active` is represented by server `is_active` and changed via DELETE. Geometry type comes from the GeoJSON object. These mappings preserve the existing backend contract.
+
+Read-only executable probes loaded the exact two frontend helper modules from `43f109f` in a Node VM without editing frontend code or sending network requests:
+
+| Probe | Observed result |
+| --- | --- |
+| Multipart keys for Department 2 | `file, department_id`; expected `file, department` |
+| CSRF header when a token is available | Correctly included |
+| `{ok:true,status:201}` with actual `created` response | `importSucceeded` returns false |
+| `{"department":["This field is required."]}` | Error helper returns an empty list |
+| Actual workbook row error for `measurement_type` | Field column becomes `—` |
+
+The frontend unit tests at this revision assert `department_id` and invented `success`/`errors_by_sheet` shapes, so a green frontend unit run does not validate the Django contract. Update those assertions against the real request/response examples and exercise the resulting HTTP workflow. The backend does not need a field alias, a new success flag or a new endpoint to resolve these frontend mismatches.
+
+### Remaining integration acceptance
+
+- **Argyris:** the metadata APIs, constraints and regressions are implemented. Maintain the contract/runbook and verify metadata against the real security adapter once available.
+- **Chrystaleni:** confirm the shared Department/membership model, role mapping, adapter path, Platform ID, login/CSRF/origin flow and read-only Department-scoped API keys. Reuse existing unpublished security/Organisation work.
+- **Antri:** implement the API/DTO mapping, correct the four Excel contract mismatches, persist catalogs/configuration and verify GIS/archive flows.
+- **Team:** choose/consolidate frontend PRs #28/#29/#30, then run the full integrated application and CI on the actual resulting revision. PR #28 includes a separate `frontend ` directory with a trailing space.
+- **OpenAPI:** Issues #9/#16 require a documented API but do not specify a mandatory schema generator. Confirm any additional approved requirement before introducing a dependency.
+
+Existing issues #9, #10-#16 cover these tasks; no duplicate issues or frontend/security implementation were created by this backend documentation update.
+
+## Historical review of 14-15 November
+
 Reviewed by Argyris Fellas with Codex assistance, 14 November 2026. Baseline: `feature/argyris-backend-metadata`, commit `c91fcd52f63924f4c25a05b2b208ecff25028463`. This review covers the nested-identifier defect, existing test coverage, Department integration and observed validation. It does not change architecture or database models.
 
 The later individual-error audit starts from `06bd44b`. Its [error catalog](../testing/backend-error-catalog.md) documents 310 separate error cases and ten additional boundary/session tests. At that stage the complete local suite passed **359 tests and 18 subtests**. It also reproduces and fixes corrupt XLSX DEFLATE content returning 500 instead of the existing 400 file error. The earlier results below remain the historical record of the narrower PATCH review; no shared architecture, schema, frontend or workflow was changed by this audit.
@@ -104,4 +160,4 @@ The nested-identifier fix was published in commits `cc4c0e2`, `53bc6f6` and `f14
 
 A subsequent inspection of SEC-03 (#12) identified its explicit distinction between a read-only user's insufficient permissions (403) and out-of-Department records (404). The operational views now look up readable/writable-scoped records and check write permission before update/deactivation. The existing read-only test covers all three domains and checks unchanged stored rows. It reproduced 404 instead of 403 before this refinement; the full refined local suite passed **39 tests and 18 subtests** on Python 3.13.18/PostGIS. No shared model, role system, migration or frontend change was added.
 
-Main remains at `2b07c9b`; the two other open PRs are frontend changes. No shared Department/membership/authorization implementation or approved contract is present there. The [shared integration handover](pr27-shared-integration.md) provides the exact proposed model boundary, adapter contract and acceptance checks for architecture/security-owner review. That approval cannot be represented by an automated test or by this backend contribution.
+At the 14 November follow-up, main was at `2b07c9b` and the other two open PRs were frontend changes. That historical main revision contained no shared Department/membership/authorization implementation or approved contract. See the 17 November section above for the current repository and frontend audit. The [shared integration handover](pr27-shared-integration.md) provides the exact proposed model boundary, adapter contract and acceptance checks for architecture/security-owner review. That approval cannot be represented by an automated test or by this backend contribution.

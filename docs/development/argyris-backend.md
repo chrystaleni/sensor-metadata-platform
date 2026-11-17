@@ -1,8 +1,8 @@
 # Backend contribution by Argyris Fellas
 
-Recorded on 13 November and updated on 15 November 2026. This branch implements the backend areas of BE-01 through BE-08 against the existing Django project and PostGIS configuration.
+Recorded on 13 November and reviewed on 17 November 2026. PR #27's BE-01 through BE-08 metadata implementation is merged into main at `2f97a90c`. PRs #31 and #32 remain separate follow-ups at this review point.
 
-The backend contribution is complete for review under BE-01 through BE-08. The shared Department schema and access adapter, the final API contract under ARCH-01 (#9), and workbook-column approval remain team integration decisions before merge and deployment.
+The metadata features are implemented. The shared Department schema and access adapter, the final API contract under ARCH-01 (#9), and workbook-column approval remain team integration decisions before shared deployment.
 
 ## Delivery contents
 
@@ -31,7 +31,11 @@ METADATA_DEPARTMENT_MODEL selects the Department model. The current default loca
 
 METADATA_ACCESS_POLICY selects the team's authorization adapter. It supplies readable_department_ids(request), writable_department_ids(request), and can_manage_controlled_lists(request). The default NoAccessPolicy denies metadata access. The APIs use DRF SessionAuthentication and Django's existing user model. The test-only FixturePolicy supplies synthetic department access for automated tests.
 
-METADATA_PLATFORM_DEPARTMENT_ID selects the built-in Platform Department. The example value is 1. The optional demo_departments and demo_catalog fixtures are intended for an empty local database and use IDs 1 and 2.
+`METADATA_PLATFORM_DEPARTMENT_ID` selects the approved existing Platform Department. Published main still defaults it to 1; PR #31 requires explicit configuration and treats missing, invalid, non-positive or out-of-range values as unconfigured. With that change present, add the agreed integer ID to the repository-root `.env`. This setting neither creates a Department nor reassigns existing catalogs.
+
+The optional `demo_departments` and `demo_catalog` fixtures use IDs 1 and 2 only in an empty isolated demo database. Their Platform ID 1 is not evidence of the shared deployment's correct ID. An unconfigured Platform produces empty catalog reads and prevents catalog writes/selections rather than silently using a customer's Department. The real authorization adapter is still required.
+
+See the [API guide](argyris-api-examples.md) for current/pending authentication behavior and the [PR #32 database runbook](https://github.com/chrystaleni/sensor-metadata-platform/blob/28e223fcb449c2f556f30d6351e9dd1070593084/docs/development/argyris-database.md) for source-revision and shared-model prerequisites.
 
 Authentication, real role rules, membership and API keys remain integration dependencies on SEC-01 through SEC-04. The code's callbacks are an implementation proposal for that integration.
 
@@ -39,7 +43,7 @@ Authentication, real role rules, membership and API keys remain integration depe
 
 The prefix is /api/v1/. Collections are measurements/, physical-devices/, network-elements/, measurement-types/, measurement-units/, physical-device-types/ and network-element-types/. POST creates a record. GET lists records. GET, PUT, PATCH and DELETE operate on {id}/. DELETE returns 204 after archiving, or 409 if active dependent records exist. Default queries exclude archived records.
 
-Requests use integer relationship IDs. The department ID is required on create and cannot be reassigned. Every Measurement requires physical_device, network_element, measurement_type and measurement_unit. Relationship selections must be active and in the selected Department or the Platform shared list as appropriate.
+Requests use integer relationship IDs. An operational record's department ID is required on create and cannot be reassigned; controlled-list ownership is server-assigned. Every Measurement requires physical_device, network_element, measurement_type and measurement_unit. Relationship selections must be active and in the selected Department or the Platform shared list as appropriate.
 
 Responses include id, department, name, description, created_at, updated_at, created_by, updated_by and is_active. List responses contain count, next, previous and results. Validation errors use DRF's field-keyed messages. Authenticated users receive 403 for unauthorized creation. Out-of-scope detail records return 404.
 
@@ -69,7 +73,7 @@ Generate the exact implemented headers with `python manage.py metadata_workbook 
 
 ## Validation performed
 
-The final 15 November integrated project checks used Python 3.13.18, Django 5.2.19, PostgreSQL 16.15, PostGIS 3.4.6 and GDAL 3.12.4.
+The historical 15 November integrated project checks used Python 3.13.18, Django 5.2.19, PostgreSQL 16.15, PostGIS 3.4.6 and GDAL 3.12.4.
 
 - Django system check reported no issues.
 - All migrations were applied to the disposable database.
@@ -82,6 +86,16 @@ The final 15 November integrated project checks used Python 3.13.18, Django 5.2.
 Run the same checks from backend/ using the documented PostGIS environment. The existing GitHub Actions workflow also checks for missing migrations.
 
 The [individual error catalog](../testing/backend-error-catalog.md) documents 310 separately executable error cases with input, HTTP/error expectations and preservation assertions. The other ten new tests cover accepted boundaries, pagination fallbacks, audit fields, workbook generation and a real session/CSRF exchange. A corrupt compressed workbook regression exposed an uncaught zlib error; the existing workbook handler now returns its standard 400 file error. No model, migration, frontend or CI workflow changed in this error audit.
+
+### 17 November verification
+
+Published main `2f97a90c` passes 387 tests and 18 subtests. PR #31 `aa743dd6` passes 397 tests and 20 subtests; PR #32 `e4fa5de5` passes 393 tests and 18 subtests in their completed GitHub Actions runs.
+
+A separate local verification copied all 82 main files after checking their Git blob hashes, overlaid the eight verified PR #31/#32 changed files, and ran against a new disposable PostgreSQL 16.15/PostGIS 3.4.6 cluster using Python 3.13.18 and Django 5.2.19. Main passed 387 tests plus 18 subtests; the combined snapshot passed 403 tests plus 20 subtests, with zero failures/errors/skips. Dependency checks, Django checks, migrations and model/migration consistency passed. The server was stopped after validation. This combined local result is not a GitHub Actions result for a merged revision.
+
+Completed CI evidence: [main](https://github.com/chrystaleni/sensor-metadata-platform/actions/runs/44108479433), [PR #31](https://github.com/chrystaleni/sensor-metadata-platform/actions/runs/44115739167), [PR #32](https://github.com/chrystaleni/sensor-metadata-platform/actions/runs/44134065018).
+
+Real authentication/Organisation integration and frontend end-to-end workflows remain unverified in the published implementation. A green metadata suite does not substitute for those owner-provided components.
 
 ## AI development evidence
 
