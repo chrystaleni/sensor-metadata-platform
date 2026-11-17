@@ -9,6 +9,8 @@ from django.contrib.auth import get_user_model
 from django.db import IntegrityError, connection, connections, transaction
 from django.db.migrations.executor import MigrationExecutor
 from django.db.migrations.recorder import MigrationRecorder
+
+from .test_identifier_upgrade import original_executor, restore_migrations
 from django.utils import timezone
 
 from metadata.models import ExternalIdentifier, NetworkElement
@@ -231,7 +233,7 @@ def test_direct_writer_collision_returns_scoped_error_with_rollback(partition, m
 
 @pytest.mark.django_db(transaction=True)
 def test_migration_backfills_active_and_archived_identifiers_without_data_loss():
-    executor = MigrationExecutor(connection)
+    executor = original_executor()
     executor.migrate([BEFORE])
     try:
         apps = executor.loader.project_state([BEFORE]).apps
@@ -245,15 +247,15 @@ def test_migration_backfills_active_and_archived_identifiers_without_data_loss()
         identifier.objects.create(network_element=parents[0], source="ERP", value="active")
         identifier.objects.create(network_element=parents[1], source="ERP", value="archived", deleted_at=timezone.now())
         before = list(identifier.objects.order_by("pk").values())
-        MigrationExecutor(connection).migrate([AFTER])
-        apps = MigrationExecutor(connection).loader.project_state([AFTER]).apps
+        original_executor().migrate([AFTER])
+        apps = original_executor().loader.project_state([AFTER]).apps
         migrated = list(apps.get_model("metadata", "ExternalIdentifier").objects.order_by("pk").values())
         assert [record.pop("department_id") for record in migrated] == [2, 3]
         assert migrated == before
-        MigrationExecutor(connection).migrate([BEFORE])
+        original_executor().migrate([BEFORE])
         assert list(identifier.objects.order_by("pk").values()) == before
     finally:
-        MigrationExecutor(connection).migrate([AFTER])
+        restore_migrations()
 
 
 @pytest.mark.django_db(transaction=True)
@@ -261,7 +263,10 @@ def test_reverse_migration_refuses_global_collision_without_changing_data(partit
     ExternalIdentifier.objects.create(network_element=partition["records"]["network-elements"], **PAIR)
     ExternalIdentifier.objects.create(network_element=partition["south_element"], **PAIR)
     before = database_snapshot()
-    with pytest.raises(IntegrityError):
-        MigrationExecutor(connection).migrate([BEFORE])
-    assert AFTER in MigrationRecorder(connection).applied_migrations()
-    assert database_snapshot() == before
+    try:
+        with pytest.raises(IntegrityError):
+            original_executor().migrate([BEFORE])
+        assert AFTER in MigrationRecorder(connection).applied_migrations()
+        assert database_snapshot() == before
+    finally:
+        restore_migrations()
