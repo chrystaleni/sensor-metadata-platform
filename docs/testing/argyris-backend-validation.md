@@ -1,5 +1,42 @@
 # Backend validation and acceptance mapping
 
+## Current verification - 17 November 2026
+
+PR #27 is merged into main `2f97a90c6d1bef8301aff68c03b5b0b9130e3d65`. Older results below are retained as the historical 15 November record; they do not describe the current complete test count or PR state.
+
+| Verified code snapshot | Regular tests | Subtests | Failures / errors / skips |
+| --- | --- | --- | --- |
+| Published main `2f97a90c` | 387 passed | 18 passed | 0 / 0 / 0 |
+| Main + existing PR #31 `aa743dd6` + existing PR #32 `e4fa5de5` | 403 passed | 20 passed | 0 / 0 / 0 |
+
+The local verification used Python 3.13.18, Django 5.2.19, DRF 3.18.3 and a new disposable PostgreSQL 16.15/PostGIS 3.4.6 cluster. It verified all 82 original Git blobs and the eight PR-changed blobs before constructing the 85-file combined snapshot. No persistent/shared database was accessed; the temporary server was stopped after validation.
+
+Both snapshots passed dependency compatibility, Django system checks, migration application and `makemigrations --check --dry-run`. Main/combined JUnit totals are 405/423 because that format also counts subtests. Those totals must not be presented as 405/423 regular pytest tests.
+
+The combined snapshot is local evidence for the existing changes together; it is not a merged Git commit or a combined GitHub Actions result. Independent completed CI runs for the reviewed code report [main: 387 + 18](https://github.com/chrystaleni/sensor-metadata-platform/actions/runs/44108479433), [PR #31: 397 + 20](https://github.com/chrystaleni/sensor-metadata-platform/actions/runs/44115739167), and [PR #32: 393 + 18](https://github.com/chrystaleni/sensor-metadata-platform/actions/runs/44134065018). Later documentation commits require checks on their own heads before their CI status can be claimed.
+
+### Follow-up coverage
+
+| Existing regression | What is verified |
+| --- | --- |
+| Incomplete external identifier PATCH | Missing source/value, valid items, omitted/empty lists, unchanged parent/identifier/audit data after 400 |
+| Deep JSON parsing | Array/object recursion returns generic ParseError 400; active/archived identifiers and metadata stay unchanged; form/multipart remain enabled |
+| PR #31 Platform configuration | Missing/invalid/non-positive/out-of-range configuration fails closed; explicit valid IDs avoid a silent Department-1 assumption |
+| PR #32 historical upgrade | Original 0004 failure reproduced atomically; replacement handles original-0003, original-0004, original-0005 and fresh histories |
+| PR #32 integrity/rollback | Active/archived rows and actors/timestamps preserved; same-Department collisions and mismatched ownership rejected; applicable reversal paths verified |
+
+The existing suite retains CRUD, search/filter/paging, same-Department relationships, geographic constraints, soft-delete dependencies, atomic Excel rollback and concurrent-writer coverage. The [individual error catalog](backend-error-catalog.md) still maps 310 executable negative cases; the Department-specific index retains its focused regression IDs.
+
+The [API contract](../development/argyris-api-examples.md), [PR #32 migration runbook](https://github.com/chrystaleni/sensor-metadata-platform/blob/28e223fcb449c2f556f30d6351e9dd1070593084/docs/development/argyris-database.md) and [shared handover](../development/pr27-shared-integration.md) distinguish implemented behavior from remaining integration requirements.
+
+### Limits of the integration evidence
+
+Default-deny and fixture-policy scoping are tested. This does not establish a production membership/role/API-key implementation or a browser end-to-end workflow.
+
+The [updated frontend audit](../development/pr27-integration-review.md#frontend-compatibility-audit) examines `Frontend` at `43f109f`. Its helper probes confirm CSRF-header support but identify four real-contract Excel failures. Its unit tests currently assert different field/success/error shapes, so their green status cannot establish compatibility with Django. Frontend files were not edited during this backend verification.
+
+## Historical validation - 15 November 2026
+
 Argyris Fellas, updated 15 November 2026. Scope is BE-01 through BE-08 in PR #27. The backend was audited against the actual GitHub issue bodies and the SEC-03 status-code contract. Closing the issues at the assignee's request does not signify teammate approval, a merged PR or a deployed application.
 
 ## Executed checks
