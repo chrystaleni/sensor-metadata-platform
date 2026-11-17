@@ -33,9 +33,9 @@ describe('GIS LineString validation regression',()=>{
   expect(check([[33,35],[33,35],[33,35]])).toMatch(/distinct/i);
  });
  it('rejects malformed nesting and invalid positions',()=>{
-  expect(check([[[33,35],[34,36]]])).toMatch(/valid WGS84/i);
-  expect(check([[33,35],[null,36]])).toMatch(/valid WGS84/i);
-  expect(check([[33,35],[181,36]])).toMatch(/valid WGS84/i);
+  expect(check([[[33,35],[34,36]]])).toMatch(/valid (?:2D )?WGS84/i);
+  expect(check([[33,35],[null,36]])).toMatch(/valid (?:2D )?WGS84/i);
+  expect(check([[33,35],[181,36]])).toMatch(/valid (?:2D )?WGS84/i);
  });
  it('accepts two distinct valid positions',()=>{
   expect(check([[33,35],[34,36]])).toBe('');
