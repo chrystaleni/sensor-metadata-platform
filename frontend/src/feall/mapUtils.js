@@ -1,3 +1,4 @@
+import {geometryError} from './geometryValidation';
 const LEAFLET_JS='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
 const LEAFLET_CSS='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
 let loader;
@@ -37,15 +38,7 @@ export function buildMapFeatures(records){
       }
       if(!geometry){invalid.push(row);continue}
       try{
-        const all=[];
-        const walk=(coords)=>{if(!Array.isArray(coords))throw Error('Coordinates must be arrays');if(typeof coords[0]==='number'){
-          if(coords.length<2||!Number.isFinite(coords[0])||!Number.isFinite(coords[1])||Math.abs(coords[0])>180||Math.abs(coords[1])>90)throw Error('Invalid WGS84 coordinates');
-          all.push(coords);return;
-        }coords.forEach(walk)};
-        walk(geometry.coordinates);
-        if(geometry.type==='Point'&&all.length!==1)throw Error('Invalid point');
-        if(geometry.type==='LineString'&&all.length<2)throw Error('Line needs two positions');
-        if(geometry.type==='Polygon'&&(!Array.isArray(geometry.coordinates[0])||geometry.coordinates[0].length<4))throw Error('Polygon needs a ring');
+        if(geometryError(geometry))throw Error('Invalid GeoJSON geometry');
         features.push({type:'Feature',geometry,properties:{id:row.id,name:row.name,externalId:row.externalId,kind,type:row.type,active:row.active!==false}});
       }catch{invalid.push(row)}
     }

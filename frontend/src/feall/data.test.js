@@ -24,3 +24,20 @@ describe('Phase 1/2 metadata validation',()=>{
   expect(validateRecord('network-elements',{...base,geometry:'{"type":"LineString","coordinates":[[33,35],[34,36]]}'},data)).toBe('');
  });
 });
+
+describe('GIS LineString validation regression',()=>{
+ const base={externalId:'N-LINE',name:'Test line',type:'Pipe',geometryType:'LineString'};
+ const check=coordinates=>validateRecord('network-elements',{...base,geometry:JSON.stringify({type:'LineString',coordinates})},data);
+ it('rejects duplicate consecutive or repeated-only positions',()=>{
+  expect(check([[33,35],[33,35]])).toMatch(/distinct/i);
+  expect(check([[33,35],[33,35],[33,35]])).toMatch(/distinct/i);
+ });
+ it('rejects malformed nesting and invalid positions',()=>{
+  expect(check([[[33,35],[34,36]]])).toMatch(/valid WGS84/i);
+  expect(check([[33,35],[null,36]])).toMatch(/valid WGS84/i);
+  expect(check([[33,35],[181,36]])).toMatch(/valid WGS84/i);
+ });
+ it('accepts two distinct valid positions',()=>{
+  expect(check([[33,35],[34,36]])).toBe('');
+ });
+});

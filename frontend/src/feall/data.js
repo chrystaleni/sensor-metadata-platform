@@ -1,3 +1,4 @@
+import {geometryError} from './geometryValidation';
 export const definitions={
 'measurements':{label:'Measurements',fields:[['externalId','Measurement ID','text',true],['name','Measurement name','text',true],['type','Measurement type','select',true,['Flow','Pressure','Level','Quality']],['unit','Measurement unit','select',true,['m³/h','bar','m','mg/L']],['device','Physical device','relation-device',true],['network','Network element','relation-network',true],['customerAccount','Customer Account','text'],['meterAccount','Meter Account','text'],['details','Details','textarea']]},
 'physical-devices':{label:'Physical Devices',fields:[['externalId','Device ID','text',true],['name','Device name','text',true],['type','Device type','select',true,['RTU','Sensor','Logger','Meter']],['latitude','Latitude','number'],['longitude','Longitude','number'],['manufacturer','Manufacturer','text']]},
@@ -35,12 +36,8 @@ export function validateRecord(kind,record,all,editingId){
    try{
      const geo=JSON.parse(record.geometry);
      if(geo.type!==record.geometryType||!Array.isArray(geo.coordinates))return 'GeoJSON type/coordinates do not match the selected geometry.';
-     const positions=[];
-     const walk=x=>{if(typeof x?.[0]==='number'){positions.push(x);return}if(!Array.isArray(x))throw Error('Invalid coordinates');x.forEach(walk)};
-     walk(geo.coordinates);
-     if(!positions.length||positions.some(p=>p.length<2||!Number.isFinite(p[0])||!Number.isFinite(p[1])||Math.abs(p[0])>180||Math.abs(p[1])>90))return 'Coordinates must be valid WGS84 longitude/latitude pairs.';
-     if(geo.type==='LineString'&&positions.length<2)return 'A line requires at least two points.';
-     if(geo.type==='Polygon'&&(!Array.isArray(geo.coordinates[0])||geo.coordinates[0].length<4||JSON.stringify(geo.coordinates[0][0])!==JSON.stringify(geo.coordinates[0].at(-1))))return 'A polygon requires a closed ring of at least four positions.';
+     const issue=geometryError(geo);
+     if(issue)return issue;
    }catch{return 'Enter valid GeoJSON geometry.'}
  }
  return '';
