@@ -54,7 +54,7 @@ Once the team supplies actual models/adapter, use two Departments and users with
 6. Import the generated linked workbook using approved catalog IDs and an authorized Department. An invalid row must roll back the full workbook.
 7. Exercise the actual login/CSRF and API-key mechanisms, and then run the React workflows against the accepted API contract.
 
-These checks supplement the existing 39-test backend suite, which already tests the callback boundary using synthetic scopes, 400/403/404/409 behavior, PostGIS integrity, rollback and concurrent writes. They do not imply that production security or React end-to-end integration has been implemented by this contribution.
+These checks supplement the [backend regression suite](pr27-json-parser.md#local-validation-and-re-review), which already tests the callback boundary using synthetic scopes, 400/403/404/409 behavior, PostGIS integrity, rollback and concurrent writes. They do not imply that production security or React end-to-end integration has been implemented by this contribution.
 
 ## Remaining acceptance owner
 
