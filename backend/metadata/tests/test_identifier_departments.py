@@ -10,7 +10,7 @@ from django.db import IntegrityError, connection, connections, transaction
 from django.db.migrations.executor import MigrationExecutor
 from django.db.migrations.recorder import MigrationRecorder
 
-from .test_identifier_upgrade import original_executor
+from .test_identifier_upgrade import original_executor, restore_migrations
 from django.utils import timezone
 
 from metadata.models import ExternalIdentifier, NetworkElement
@@ -233,7 +233,6 @@ def test_direct_writer_collision_returns_scoped_error_with_rollback(partition, m
 
 @pytest.mark.django_db(transaction=True)
 def test_migration_backfills_active_and_archived_identifiers_without_data_loss():
-    original_targets = MigrationExecutor(connection).loader.graph.leaf_nodes()
     executor = original_executor()
     executor.migrate([BEFORE])
     try:
@@ -256,7 +255,7 @@ def test_migration_backfills_active_and_archived_identifiers_without_data_loss()
         original_executor().migrate([BEFORE])
         assert list(identifier.objects.order_by("pk").values()) == before
     finally:
-        MigrationExecutor(connection).migrate(original_targets)
+        restore_migrations()
 
 
 @pytest.mark.django_db(transaction=True)
@@ -264,11 +263,10 @@ def test_reverse_migration_refuses_global_collision_without_changing_data(partit
     ExternalIdentifier.objects.create(network_element=partition["records"]["network-elements"], **PAIR)
     ExternalIdentifier.objects.create(network_element=partition["south_element"], **PAIR)
     before = database_snapshot()
-    original_targets = MigrationExecutor(connection).loader.graph.leaf_nodes()
     try:
         with pytest.raises(IntegrityError):
             original_executor().migrate([BEFORE])
         assert AFTER in MigrationRecorder(connection).applied_migrations()
         assert database_snapshot() == before
     finally:
-        MigrationExecutor(connection).migrate(original_targets)
+        restore_migrations()

@@ -30,10 +30,51 @@ class OriginalMigrationLoader(MigrationLoader):
         }
 
 
+class OriginalMigrationExecutor(MigrationExecutor):
+    def __init__(self, database):
+        self.connection = database
+        self.loader = OriginalMigrationLoader(database, replace_migrations=False)
+        self.recorder = MigrationRecorder(database)
+        self.progress_callback = None
+        applied = self.loader.applied_migrations
+        replacement = ("metadata", "0004_squashed_0005_identifier_department_scope")
+        if replacement in applied:
+            # A completed replacement is schema-equivalent to both originals.
+            for key in (GLOBAL_UNIQUENESS, TARGET):
+                applied.setdefault(key, applied[replacement])
+        self.loader.applied_migrations = {
+            key: value for key, value in applied.items()
+            if key in self.loader.graph.nodes
+        }
+
+    def unapply_migration(self, state, migration, fake=False):
+        result = super().unapply_migration(state, migration, fake=fake)
+        if (migration.app_label, migration.name) == TARGET:
+            # Remove the completed-replacement marker only after the schema
+            # operation succeeds. A failed reverse must retain its history.
+            self.recorder.record_unapplied(
+                "metadata", "0004_squashed_0005_identifier_department_scope",
+            )
+        return result
+
+
 def original_executor():
+    return OriginalMigrationExecutor(connection)
+
+
+def restore_migrations():
+    # Rebuild targets after transitions: partial application selects a different
+    # graph from the fully applied replacement.
     executor = MigrationExecutor(connection)
-    executor.loader = OriginalMigrationLoader(connection, replace_migrations=False)
-    return executor
+    executor.migrate(executor.loader.graph.leaf_nodes())
+    with connection.cursor() as cursor:
+        columns = {column.name for column in connection.introspection.get_table_description(
+            cursor, "metadata_externalidentifier",
+        )}
+        constraints = connection.introspection.get_constraints(cursor, "metadata_externalidentifier")
+    assert "department_id" in columns
+    assert "meta_active_dept_external_identifier" in constraints
+    assert "meta_identifier_element_department" in constraints
 
 
 def identifier_index():
@@ -55,7 +96,6 @@ def identifier_index():
 def test_original_0004_rejects_cross_department_pairs_atomically():
     assert connection.vendor == "postgresql"
     executor = original_executor()
-    original_targets = MigrationExecutor(connection).loader.graph.leaf_nodes()
     fixture_ids = []
     try:
         executor.migrate([BASELINE])
@@ -111,7 +151,7 @@ def test_original_0004_rejects_cross_department_pairs_atomically():
                         [fixture_ids],
                     )
         finally:
-            MigrationExecutor(connection).migrate(original_targets)
+            restore_migrations()
 
 
 REPLACEMENT = ("metadata", "0004_squashed_0005_identifier_department_scope")
@@ -119,7 +159,6 @@ REPLACEMENT = ("metadata", "0004_squashed_0005_identifier_department_scope")
 
 @pytest.fixture
 def historical_identifiers():
-    targets = MigrationExecutor(connection).loader.graph.leaf_nodes()
     executor = original_executor()
     recorder = MigrationRecorder(connection)
     original_history = set(recorder.applied_migrations())
@@ -170,7 +209,13 @@ def historical_identifiers():
                 with connection.cursor() as cursor:
                     cursor.execute("DELETE FROM metadata_externalidentifier WHERE id = ANY(%s)", [ids])
         finally:
-            MigrationExecutor(connection).migrate(targets)
+            restore_migrations()
+            # Django may record both original aliases after applying a
+            # replacement. Normalize only aliases absent at fixture entry,
+            # after verifying the restored schema above.
+            for key in (GLOBAL_UNIQUENESS, TARGET, REPLACEMENT):
+                if key not in original_history:
+                    recorder.record_unapplied(*key)
             assert set(recorder.applied_migrations()) == original_history
             assert list(
                 recorder.migration_qs.exclude(app="metadata").order_by("pk").values()
@@ -190,7 +235,7 @@ def test_replacement_preserves_active_and_archived_identifiers_and_reverses(hist
     executor = MigrationExecutor(connection)
     assert [m.name for m, backwards in executor.migration_plan([REPLACEMENT])] == [REPLACEMENT[1]]
     executor.migrate([REPLACEMENT])
-    apps = MigrationExecutor(connection).loader.project_state([REPLACEMENT]).apps
+    apps = original_executor().loader.project_state([TARGET]).apps
     CurrentIdentifier = apps.get_model("metadata", "ExternalIdentifier")
     rows = list(CurrentIdentifier.objects.order_by("pk").values())
     owners = {parent.pk: parent.department_id for parent in parents}
@@ -268,7 +313,7 @@ def test_existing_original_migration_history_is_supported(historical_identifiers
     assert [m.name for m, backwards in plan] == ([TARGET[1]] if starting_point == GLOBAL_UNIQUENESS else [])
     executor.migrate(executor.loader.graph.leaf_nodes())
     assert REPLACEMENT in MigrationRecorder(connection).applied_migrations()
-    apps = MigrationExecutor(connection).loader.project_state([REPLACEMENT]).apps
+    apps = original_executor().loader.project_state([TARGET]).apps
     rows = list(apps.get_model("metadata", "ExternalIdentifier").objects.values())
     assert [row.pop("department_id") for row in rows] == [parents[0].department_id]
     assert rows == before
