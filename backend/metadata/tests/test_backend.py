@@ -288,6 +288,49 @@ class MetadataAPITests(APITestCase):
         self.client.force_authenticate(user=None)
         self.assertIn(self.client.get(f"{API}physical-devices/").status_code, (401, 403))
 
+    def test_missing_or_nonexistent_platform_does_not_use_customer_department_one(self):
+        Department.objects.filter(pk=1).update(name="Customer Department")
+        catalog_path = f"{API}physical-device-types/"
+        existing_pk = self.catalog["device_type"]
+        existing_name = PhysicalDeviceType.objects.get(pk=existing_pk).name
+
+        for platform_id in (None, 42):
+            with (
+                self.subTest(platform_id=platform_id),
+                override_settings(METADATA_PLATFORM_DEPARTMENT_ID=platform_id),
+            ):
+                self.client.force_authenticate(self.manager)
+                self.assertEqual(self.client.get(catalog_path).json()["count"], 0)
+                self.assertEqual(self.post("physical-device-types", {"name": "Pump"}).status_code, 403)
+                self.assertEqual(self.client.get(f"{catalog_path}{existing_pk}/").status_code, 404)
+                self.client.force_authenticate(self.editor)
+                response = self.post("physical-devices", {
+                    "department": 2, "name": "Invalid", "device_type": existing_pk,
+                })
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("device_type", response.data)
+
+        self.assertEqual(list(PhysicalDeviceType.objects.values_list("department_id", "name")), [(1, existing_name)])
+        self.assertFalse(PhysicalDevice.objects.exists())
+
+    @override_settings(METADATA_PLATFORM_DEPARTMENT_ID=42)
+    def test_explicit_platform_department_is_used_for_catalog_ownership_and_relationships(self):
+        Department.objects.filter(pk=1).update(name="Customer Department")
+        Department.objects.create(pk=42, name="Platform")
+        self.client.force_authenticate(self.manager)
+        response = self.post("physical-device-types", {"name": "Pump"})
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["department"], 42)
+        catalog_item = PhysicalDeviceType.objects.get(pk=response.data["id"])
+        self.assertEqual(catalog_item.department_id, 42)
+
+        self.client.force_authenticate(self.editor)
+        self.assertEqual(self.client.get(f"{API}physical-device-types/").json()["count"], 1)
+        response = self.post("physical-devices", {
+            "department": 2, "name": "Pump station", "device_type": catalog_item.pk,
+        })
+        self.assertEqual(response.status_code, 201, response.data)
+
     def test_catalog_is_shared_and_only_manager_writes(self):
         rogue = PhysicalDeviceType.objects.create(department_id=3, name="Non-platform type")
         self.assertEqual(self.client.get(f"{API}physical-device-types/").json()["count"], 1)
