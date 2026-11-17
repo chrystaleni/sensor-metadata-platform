@@ -9,7 +9,6 @@ from django.db.models import QuerySet
 BEFORE = ("local_departments", "0002_organisation_department_organisation")
 AFTER = ("local_departments", "0003_backfill_department_organisations")
 REQUIRED = ("local_departments", "0004_require_department_organisation")
-METADATA = ("metadata", "0004_identifier_system_uniqueness")
 MANIFEST = "DEPARTMENT_ORGANISATION_BACKFILL"
 
 
@@ -17,26 +16,40 @@ MANIFEST = "DEPARTMENT_ORGANISATION_BACKFILL"
 def backfill(monkeypatch, transactional_db):
     executor = MigrationExecutor(connection)
     original_targets = executor.loader.graph.leaf_nodes()
-    executor.migrate([BEFORE, METADATA])
-    apps = executor.loader.project_state([BEFORE, METADATA]).apps
-    department = apps.get_model("local_departments", "Department")
-    organisation = apps.get_model("local_departments", "Organisation")
-    device = apps.get_model("metadata", "PhysicalDevice")
-    device_type = apps.get_model("metadata", "PhysicalDeviceType")
-    # Isolate both empty and populated cases from any previously provisioned identity.
-    organisation.objects.all().delete()
-    monkeypatch.delenv(MANIFEST, raising=False)
+    # Django redirects this dependency to the replacement when it is available.
+    metadata_targets = [
+        parent.key for parent in executor.loader.graph.node_map[AFTER].parents
+        if parent.key[0] == "metadata"
+    ]
+    assert len(metadata_targets) == 1, "Expected one metadata dependency for the Organisation backfill."
+    targets = [BEFORE, *metadata_targets]
+    apps = None
 
     try:
-        yield department, organisation, device, device_type
-    finally:
-        device.objects.all().delete()
-        device_type.objects.all().delete()
-        apps.get_model("metadata", "MeasurementUnit").objects.all().delete()
-        department.objects.all().delete()
+        executor.migrate(targets)
+        apps = executor.loader.project_state(targets).apps
+        department = apps.get_model("local_departments", "Department")
+        organisation = apps.get_model("local_departments", "Organisation")
+        device = apps.get_model("metadata", "PhysicalDevice")
+        device_type = apps.get_model("metadata", "PhysicalDeviceType")
+        # Isolate empty and populated cases from any previously provisioned identity.
         organisation.objects.all().delete()
         monkeypatch.delenv(MANIFEST, raising=False)
-        MigrationExecutor(connection).migrate(original_targets)
+        yield department, organisation, device, device_type
+    finally:
+        try:
+            if apps is not None:
+                for app, model in (
+                    ("metadata", "PhysicalDevice"),
+                    ("metadata", "PhysicalDeviceType"),
+                    ("metadata", "MeasurementUnit"),
+                    ("local_departments", "Department"),
+                    ("local_departments", "Organisation"),
+                ):
+                    apps.get_model(app, model).objects.all().delete()
+        finally:
+            monkeypatch.delenv(MANIFEST, raising=False)
+            MigrationExecutor(connection).migrate(original_targets)
 
 
 def test_empty_database_creates_only_platform_organisation(backfill):
@@ -121,8 +134,7 @@ def test_backfill_requires_verified_catalog_owner(backfill, monkeypatch, platfor
     platform = department.objects.create(id=83, name="Shared Reference Data")
     device_type.objects.create(name="Station", department=platform)
     if conflicting_owner:
-        apps = MigrationExecutor(connection).loader.project_state([BEFORE, METADATA]).apps
-        apps.get_model("metadata", "MeasurementUnit").objects.create(
+        device_type._meta.apps.get_model("metadata", "MeasurementUnit").objects.create(
             name="Metres", symbol="m", department_id=ordinary.pk,
         )
     manifest = {
