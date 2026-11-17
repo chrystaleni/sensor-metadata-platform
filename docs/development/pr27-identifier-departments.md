@@ -22,7 +22,17 @@ A composite FK `(department_id,network_element_id)` references the existing uniq
 
 Migrations 0001-0004 remain byte-for-byte unchanged. No shared Department/User model, frontend, API endpoint or CI workflow was changed. All migration execution during this work used separate local/test databases.
 
-Backfill preserves IDs, values, audit fields and archived rows. Reversal to 0004 restores global uniqueness and will fail atomically if different Departments now contain the same active pair. No automatic deletion/merging is performed. Agree a backup/data-owner plan before any real downgrade. Databases still at 0003 must also satisfy the unchanged intermediate 0004 preflight in the [database guide](argyris-database.md).
+Backfill preserves IDs, values, audit fields and archived rows. Reversal to 0004 restores global uniqueness and will fail atomically if different Departments now contain the same active pair. No automatic deletion/merging is performed. Agree a backup/data-owner plan before any real downgrade. Published main still has the intermediate original 0004 limitation. PR #32 supplies a replacement path for databases at 0003; the [database upgrade runbook](argyris-database.md#select-the-path-from-the-actual-migration-history) distinguishes that path from original-0004, original-0005 and fresh histories.
+
+## PR #32 upgrade compatibility follow-up
+
+Reviewed replacement revision: `e4fa5de50f0bdeec81526e329792e673e7ae3f67`, 17 November 2026. PR #32 remains separate from the merged PR #27 at this review point.
+
+The new `0004_squashed_0005_identifier_department_scope` replaces original 0004/0005 while leaving both files unchanged. For a database at 0003, it installs the final Department-scoped constraints directly, preserving legitimate cross-Department reuse and archived identifiers. A same-Department active collision still rejects the upgrade atomically.
+
+Django completes a partially applied original pair through original 0005; a fully applied original pair already has the required schema. Fresh installations use the replacement. Follow the [complete runbook](argyris-database.md#migration-history-and-pr-32-upgrade-runbook) for preflight, backups, history inspection, validation and path-specific rollback limitations. The previous global duplicate query applies to the historical global rule, not the replacement's Department-scoped acceptance criterion.
+
+`metadata/tests/test_identifier_upgrade.py` covers the historical failure, all four installation histories, data/actor/timestamp preservation, same-Department collisions, database ownership constraints and replacement reversal. Its migration-history helpers are test-only. This follow-up does not change API/Excel identifier validation or request/response fields.
 
 ## Regression evidence
 
