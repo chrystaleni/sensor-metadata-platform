@@ -6,9 +6,9 @@ export default function ExcelPage(){
  const [file,setFile]=useState(null),[departmentId,setDepartmentId]=useState(''),[state,setState]=useState('idle');
  const [error,setError]=useState(''),[report,setReport]=useState(null);
  const fileInput=useRef(null);
- // The backend owner must confirm both the URL and multipart field names before enabling uploads.
- const endpoint=import.meta.env.VITE_EXCEL_IMPORT_URL;
- const configured=Boolean(endpoint);
+ // Confirmed metadata import contract: POST /api/v1/imports/excel/.
+ const endpoint=import.meta.env.VITE_EXCEL_IMPORT_URL||'/api/v1/imports/excel/';
+ const configured=true;
  const choose=e=>{
   const selected=e.target.files?.[0]||null;
   setFile(selected);setError(selected&&!/\.xlsx$/i.test(selected.name)?'Choose an .xlsx Excel workbook.':'');
@@ -47,7 +47,7 @@ export default function ExcelPage(){
    </button>
    {state==='loading'&&<p role="status">Uploading and validating workbook…</p>}
    {error&&<p role="alert" style={{color:'#b42318'}}>{error}</p>}
-   {state==='success'&&<p role="status">{messageOf(report?.message)||'Workbook imported successfully.'}</p>}
+   {state==='success'&&<p role="status">{report?.created ? `Workbook imported successfully: ${Object.entries(report.created).map(([sheet,count])=>`${sheet}: ${count}`).join(', ')}` : messageOf(report?.message)||'Workbook imported successfully.'}</p>}
    {rowErrors.length>0&&<div><h3>Validation errors</h3><table><thead><tr><th>Sheet</th><th>Row</th><th>Field</th><th>Message</th></tr></thead><tbody>
     {rowErrors.map((r,i)=><tr key={i}><td>{r.sheet}</td><td>{r.row}</td><td>{r.field}</td><td>{r.message}</td></tr>)}
    </tbody></table></div>}

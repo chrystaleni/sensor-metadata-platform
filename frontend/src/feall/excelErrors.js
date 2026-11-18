@@ -13,7 +13,10 @@ export function extractImportErrors(payload){
     if(!value || typeof value==='string')continue;
     if(Array.isArray(value)){
       for(const item of value){
-        if(item&&typeof item==='object')results.push({sheet:item.sheet||'—',row:item.row??'—',field:item.field||item.loc?.join('.')||'—',message:messageOf(item.message||item.msg||item.detail||item.error||item)});
+        if(item&&typeof item==='object'){
+          if(item.errors&&typeof item.errors==='object')for(const [field,messages] of Object.entries(item.errors))results.push({sheet:item.sheet||'—',row:item.row??'—',field,message:messageOf(messages)});
+          else results.push({sheet:item.sheet||'—',row:item.row??'—',field:item.field||item.loc?.join('.')||'—',message:messageOf(item.message||item.msg||item.detail||item.error||item)});
+        }
         else results.push({sheet:'—',row:'—',field:'—',message:messageOf(item)});
       }
     }else if(typeof value==='object'){

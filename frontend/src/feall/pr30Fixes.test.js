@@ -17,7 +17,8 @@ describe('PR30 Excel upload contracts',()=>{
   const file=new File(['x'],'data.xlsx');
   const request=createImportRequest(file,7,'token');
   expect(request.body.get('file')).toBe(file);
-  expect(request.body.get('department_id')).toBe('7');
+  expect(request.body.get('department')).toBe('7');
+  expect(request.body.has('department_id')).toBe(false);
   expect(request.headers['X-CSRFToken']).toBe('token');
   expect(request.credentials).toBe('include');
  });
@@ -26,7 +27,8 @@ describe('PR30 Excel upload contracts',()=>{
   expect(importSucceeded({ok:true},{message:'OK'})).toBe(false);
   expect(importSucceeded({ok:false},{success:true})).toBe(false);
   expect(importSucceeded({ok:true},{success:true,errors:[{sheet:'A',row:2,field:'id',message:'Invalid'}]})).toBe(false);
-  expect(importSucceeded({ok:true},{success:true})).toBe(true);
+  expect(importSucceeded({ok:true,status:201},{created:{Measurements:1}})).toBe(true);
+  expect(importSucceeded({ok:true,status:200},{success:true})).toBe(false);
  });
  it('groups Excel errors by sheet, row and field',()=>expect(groupedImportErrors({errors_by_sheet:{Devices:{4:{name:['Required']}}}})).toEqual([{sheet:'Devices',row:'4',field:'name',message:'Required'}]));
 });
