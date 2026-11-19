@@ -8,6 +8,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from metadata.filters import MetadataPagination
 from .models import APIKey
 from .permissions import managed_departments
 
@@ -32,6 +33,7 @@ class APIKeyViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin,
     authentication_classes = (KeyAwareSessionAuthentication,)
     permission_classes = (IsAuthenticated,)
     serializer_class = APIKeySerializer
+    pagination_class = MetadataPagination
 
     def get_queryset(self):
         scope = managed_departments(self.request.user)

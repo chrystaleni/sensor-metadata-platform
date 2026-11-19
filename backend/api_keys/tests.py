@@ -41,7 +41,7 @@ def test_hash_storage_and_one_time_display(fixture):
  assert 'no-store' in response.headers['Cache-Control']
  response=c.get('/api/v1/api-keys/')
  assert response.status_code==200
- assert 'key' not in str(response.data) and 'digest' not in str(response.data)
+ assert all('key' not in row and 'digest' not in row for row in response.data['results'])
 
 def test_readonly_scope_and_shared_catalog_reads(fixture):
  _,north,south,_,raw=fixture;c=key_client(raw)
@@ -100,3 +100,21 @@ def test_key_header_cannot_borrow_a_more_privileged_session(fixture):
  assert c.get(f'/api/v1/physical-devices/{south.pk}/').status_code==404
  assert c.post('/api/v1/physical-devices/',{},format='json').status_code==403
  assert c.get('/api/v1/api-keys/').status_code==403
+
+
+def test_management_requires_real_session_csrf(fixture):
+ admin,*_=fixture
+ c=APIClient(enforce_csrf_checks=True);c.force_login(admin)
+ payload={'name':'CSRF protected','department':2}
+ assert c.post('/api/v1/api-keys/',payload,format='json').status_code==403
+ c.get('/api/v1/auth/csrf/')
+ response=c.post('/api/v1/api-keys/',payload,format='json',HTTP_X_CSRFTOKEN=c.cookies['csrftoken'].value)
+ assert response.status_code==201,response.data
+
+
+def test_expired_creation_request_does_not_store_a_key(fixture):
+ admin,*_=fixture;c=APIClient();c.force_authenticate(admin)
+ count=APIKey.objects.count()
+ response=c.post('/api/v1/api-keys/',{'name':'Expired','department':2,'expires_at':(timezone.now()-timedelta(days=1)).isoformat()},format='json')
+ assert response.status_code==400
+ assert APIKey.objects.count()==count
