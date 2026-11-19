@@ -118,3 +118,19 @@ def test_expired_creation_request_does_not_store_a_key(fixture):
  response=c.post('/api/v1/api-keys/',{'name':'Expired','department':2,'expires_at':(timezone.now()-timedelta(days=1)).isoformat()},format='json')
  assert response.status_code==400
  assert APIKey.objects.count()==count
+
+
+def test_measurement_collection_configuration_is_department_scoped(fixture):
+ from metadata.models import Measurement,MeasurementType,MeasurementUnit,NetworkElement,NetworkElementType
+ _,north,south,_,raw=fixture
+ rows=[]
+ for device in (north,south):
+  parent=NetworkElement.objects.create(name=f'Parent {device.name}',department_id=device.department_id,element_type=NetworkElementType.objects.get())
+  rows.append(Measurement.objects.create(name=f'Measurement {device.name}',department_id=device.department_id,physical_device=device,network_element=parent,measurement_type=MeasurementType.objects.get(),measurement_unit=MeasurementUnit.objects.get(),data_collection_config={'protocol':'https','endpoint':'https://example.invalid/config','source_identifier':device.name,'extra_settings':{'interval':60}}))
+ c=key_client(raw)
+ response=c.get(f'/api/v1/measurements/{rows[0].pk}/')
+ assert response.status_code==200,response.data
+ assert response.data['data_collection_config']==rows[0].data_collection_config
+ assert c.get(f'/api/v1/measurements/{rows[1].pk}/').status_code==404
+ response=c.get('/api/v1/measurements/?search=South')
+ assert response.status_code==200 and response.data['count']==0
