@@ -14,6 +14,10 @@ describe('GIS resource identities',()=>{
  it('selects and zooms the correct resource when numeric IDs collide',async()=>{
   render(<GisMap records={{'physical-devices':[{id:1,name:'Device',latitude:35,longitude:33}], 'network-elements':[{id:1,name:'Network',geometryType:'Point',latitude:35,longitude:34}]}}/>);
   await waitFor(()=>expect(screen.queryByText('Loading interactive map…')).not.toBeInTheDocument());
+  await waitFor(() => {
+    expect(mocks.fit).toHaveBeenCalled();
+    expect(mocks.fit.mock.calls.at(-1)[0].name).toBe('all');
+  });
   fireEvent.click(screen.getByRole('button',{name:/Network Network Element/}));
   expect(screen.getByText('Selected metadata').parentElement.querySelector('dd').textContent).toBe('Network');
   expect(mocks.fit.mock.calls.at(-1)[0].name).toBe('Network');
