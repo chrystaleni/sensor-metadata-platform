@@ -1,5 +1,6 @@
 import {useCallback,useEffect,useState} from 'react';
-import {makeApiClient,normalizePage} from './apiClient';
+import {makeApiClient} from './apiClient';
+import {fetchAllPages} from './pagination';
 import {csrfToken} from './excelImport';
 import {formatApiError} from './backendModel';
 
@@ -7,8 +8,8 @@ const api=makeApiClient({baseUrl:import.meta.env.VITE_API_BASE_URL||'/api/v1',cs
 export default function ApiKeys({department,allowed}){
  const [rows,setRows]=useState([]),[name,setName]=useState(''),[expires,setExpires]=useState('');
  const [raw,setRaw]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
- const reload=useCallback(async()=>{const data=normalizePage(await api('/api-keys/',{params:{department}}));setRows(data.results);},[department]);
- useEffect(()=>{let live=true;const controller=new AbortController();if(allowed&&department)api('/api-keys/',{params:{department},signal:controller.signal}).then(data=>{if(live)setRows(normalizePage(data).results)}).catch(e=>{if(live)setError(formatApiError(e))});return()=>{live=false;controller.abort()}},[allowed,department]);
+ const reload=useCallback(async()=>{const data=await fetchAllPages(api,'/api-keys/',{params:{department}});setRows(data);},[department]);
+ useEffect(()=>{let live=true;const controller=new AbortController();if(allowed&&department)fetchAllPages(api,'/api-keys/',{params:{department},signal:controller.signal}).then(data=>{if(live)setRows(data)}).catch(e=>{if(live)setError(formatApiError(e))});return()=>{live=false;controller.abort()}},[allowed,department]);
  async function create(e){e.preventDefault();setBusy(true);setError('');setRaw('');try{const data=await api('/api-keys/',{method:'POST',data:{name,department:Number(department),...(expires?{expires_at:new Date(expires).toISOString()}:{})}});setRaw(data.key);setName('');await reload();}catch(e){setError(formatApiError(e))}finally{setBusy(false)}}
  async function revoke(id){setError('');try{await api(`/api-keys/${id}/`,{method:'DELETE'});await reload()}catch(e){setError(formatApiError(e))}}
  if(!allowed||!department)return <p>API key management requires a Department or System Administrator and an authorized Department.</p>;
