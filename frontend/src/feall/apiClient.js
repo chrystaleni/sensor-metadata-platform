@@ -8,7 +8,7 @@ export class ApiError extends Error {
   }
 }
 
-export function makeApiClient({ baseUrl, fetchImpl = fetch, csrf = () => '' }) {
+export function makeApiClient({ baseUrl, fetchImpl = (...args) => globalThis.fetch(...args), csrf = () => '' }) {
   if (!baseUrl) throw new Error('Backend API base URL is not configured.');
   const root = baseUrl.replace(/\/+$/, '');
   return async function request(path, { method = 'GET', data, signal, params } = {}) {
