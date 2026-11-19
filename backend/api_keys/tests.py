@@ -62,7 +62,7 @@ def test_readonly_scope_and_shared_catalog_reads(fixture):
 def test_invalid_keys_fail_closed(fixture,settings,state):
  admin,_,_,key,raw=fixture
  if state=='invalid':raw=raw[:-1]+('a' if raw[-1]!='a' else 'b')
- elif state=='malformed':raw='invalid'
+ elif state=='malformed':raw='malformed-secret-credential'
  elif state=='expired':APIKey.objects.filter(pk=key.pk).update(expires_at=timezone.now()-timedelta(seconds=1))
  elif state=='revoked':APIKey.objects.filter(pk=key.pk).update(revoked_at=timezone.now())
  elif state=='inactive-owner':admin.is_active=False;admin.save()
