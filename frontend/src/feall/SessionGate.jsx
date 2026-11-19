@@ -33,5 +33,5 @@ export function SessionGate({component:Component}){
  }
  if(session===null)return <p role="status">Restoring session…</p>;
  if(!session)return <main className="all-pad"><h1>Sensor Metadata — Sign in</h1><form onSubmit={login}><label>Username<input autoComplete="username" required value={username} onChange={e=>setUsername(e.target.value)}/></label><label>Password<input type="password" autoComplete="current-password" required value={password} onChange={e=>setPassword(e.target.value)}/></label><button disabled={busy}>{busy?'Signing in…':'Sign in'}</button></form>{error&&<p role="alert">{error}</p>}</main>;
- return <>{error&&<p role="alert">{error}</p>}<Component session={session} onLogout={logout} onSessionCheck={check}/></>;
+ return <>{error&&<p role="alert">{error}</p>}<Component key={JSON.stringify([session.role,session.departments,session.permissions])} session={session} onLogout={logout} onSessionCheck={check}/></>;
 }

@@ -6,6 +6,7 @@ export const NAV_ITEMS = [
   { id: 'gis-map', label: 'GIS Map', icon: '◎' },
   { id: 'controlled-lists', label: 'Controlled Lists', icon: '☷' },
   { id: 'excel-import-export', label: 'Excel Import/Export', icon: '⇅' },
+  { id: 'api-keys', label: 'API Keys', icon: '⚿' },
   { id: 'administration', label: 'Administration', icon: '♙' },
   { id: 'settings', label: 'Settings', icon: '⚙' },
 ]

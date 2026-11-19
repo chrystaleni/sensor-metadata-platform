@@ -10,7 +10,16 @@ it('imports into the selected membership and signals a dashboard/map refresh',as
  await screen.findByText(/Workbook imported successfully/);
  expect(fetch.mock.calls[0][1].body.get('department')).toBe('7');expect(onImported).toHaveBeenCalledTimes(1);
 });
-it('does not refresh on failed validation and disables imports for viewers',async()=>{
+it('disables imports for viewers',async()=>{
  vi.stubGlobal('fetch',vi.fn());render(<ExcelPage department="7" canWrite={false}/>);
  expect(screen.getByText('Import workbook')).toBeDisabled();expect(screen.getByLabelText(/Select Excel workbook/)).toBeDisabled();
+});
+
+
+it('retains row-level validation errors and does not refresh on failure',async()=>{
+ const onImported=vi.fn();vi.stubGlobal('fetch',vi.fn(async()=>({ok:false,status:400,json:async()=>({errors:[{sheet:'Measurements',row:2,errors:{name:['Required.']}}]})})));
+ render(<ExcelPage department="7" onImported={onImported}/>);
+ fireEvent.change(screen.getByLabelText(/Select Excel workbook/),{target:{files:[new File(['test'],'bad.xlsx')]}});
+ fireEvent.click(screen.getByText('Import workbook'));
+ await screen.findByText('Required.');expect(onImported).not.toHaveBeenCalled();
 });
