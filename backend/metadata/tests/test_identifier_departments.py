@@ -234,12 +234,20 @@ def test_direct_writer_collision_returns_scoped_error_with_rollback(partition, m
 @pytest.mark.django_db(transaction=True)
 def test_migration_backfills_active_and_archived_identifiers_without_data_loss():
     executor = original_executor()
-    executor.migrate([BEFORE])
+    department_targets = executor.loader.graph.leaf_nodes("local_departments")
+    targets = [BEFORE, *department_targets]
     try:
-        apps = executor.loader.project_state([BEFORE]).apps
+        executor.migrate(targets)
+        apps = executor.loader.project_state(targets).apps
         department = apps.get_model("local_departments", "Department")
-        department.objects.bulk_create([department(pk=1, name="Platform"), department(pk=2, name="North"),
-                                        department(pk=3, name="South")])
+        organisation = apps.get_model("local_departments", "Organisation")
+        platform, _ = organisation.objects.get_or_create(code="platform", defaults={"name": "Platform"})
+        customer = organisation.objects.create(code="identifier-test", name="Identifier test")
+        department.objects.bulk_create([
+            department(pk=1, name="Platform", organisation=platform),
+            department(pk=2, name="North", organisation=customer),
+            department(pk=3, name="South", organisation=customer),
+        ])
         kind = apps.get_model("metadata", "NetworkElementType").objects.create(department_id=1, name="Site")
         element = apps.get_model("metadata", "NetworkElement")
         parents = [element.objects.create(department_id=dept, name=f"Site {dept}", element_type=kind) for dept in (2, 3)]
@@ -247,12 +255,12 @@ def test_migration_backfills_active_and_archived_identifiers_without_data_loss()
         identifier.objects.create(network_element=parents[0], source="ERP", value="active")
         identifier.objects.create(network_element=parents[1], source="ERP", value="archived", deleted_at=timezone.now())
         before = list(identifier.objects.order_by("pk").values())
-        original_executor().migrate([AFTER])
-        apps = original_executor().loader.project_state([AFTER]).apps
+        original_executor().migrate([AFTER, *department_targets])
+        apps = original_executor().loader.project_state([AFTER, *department_targets]).apps
         migrated = list(apps.get_model("metadata", "ExternalIdentifier").objects.order_by("pk").values())
         assert [record.pop("department_id") for record in migrated] == [2, 3]
         assert migrated == before
-        original_executor().migrate([BEFORE])
+        original_executor().migrate(targets)
         assert list(identifier.objects.order_by("pk").values()) == before
     finally:
         restore_migrations()
