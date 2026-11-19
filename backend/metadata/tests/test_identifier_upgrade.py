@@ -24,6 +24,12 @@ ORGANISATION_UPGRADES = [
     ("local_departments", "0004_require_department_organisation"),
 ]
 
+SECURITY_UPGRADES = [
+    ("platform_security", "0001_initial"),
+    ("platform_security", "0002_userrole"),
+    ("platform_security", "0003_loginattemptwindow"),
+]
+
 
 @pytest.fixture
 def approved_identifier_backfill(monkeypatch):
@@ -47,11 +53,12 @@ def approved_identifier_backfill(monkeypatch):
 
 
 def unrelated_migration_history(recorder):
-    # These two Organisation migrations legitimately reverse below metadata
-    # 0004 and run again on restoration. All other history stays byte-for-byte.
-    return list(recorder.migration_qs.exclude(app="metadata").exclude(
-        app="local_departments", name__in=[name for _, name in ORGANISATION_UPGRADES],
-    ).order_by("pk").values())
+    # These exact descendants legitimately reverse with Department ownership.
+    # Keep every other app/name row, including API keys, byte-for-byte.
+    history = recorder.migration_qs.exclude(app="metadata")
+    for app, name in (*ORGANISATION_UPGRADES, *SECURITY_UPGRADES):
+        history = history.exclude(app=app, name=name)
+    return list(history.order_by("pk").values())
 
 
 class OriginalMigrationLoader(MigrationLoader):
@@ -348,7 +355,9 @@ def test_existing_original_migration_history_is_supported(historical_identifiers
     organisation_plan = [(m.app_label, m.name) for m, _ in plan if m.app_label == "local_departments"]
     assert metadata_plan == ([TARGET] if starting_point == GLOBAL_UNIQUENESS else [])
     assert organisation_plan == ORGANISATION_UPGRADES
-    assert len(plan) == len(metadata_plan) + len(organisation_plan)
+    security_plan = [(m.app_label, m.name) for m, _ in plan if m.app_label == "platform_security"]
+    assert security_plan == SECURITY_UPGRADES
+    assert len(plan) == len(metadata_plan) + len(organisation_plan) + len(security_plan)
     executor.migrate(executor.loader.graph.leaf_nodes())
     assert REPLACEMENT in MigrationRecorder(connection).applied_migrations()
     apps = original_executor().loader.project_state([TARGET]).apps
