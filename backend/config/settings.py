@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     "local_departments",
     "metadata",
     "platform_security",
+    "api_keys",
 ]
 
 if USE_POSTGIS:
@@ -160,6 +161,9 @@ REST_FRAMEWORK = {
         "rest_framework.parsers.FormParser",
         "rest_framework.parsers.MultiPartParser",
     ],
-    "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.SessionAuthentication"],
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "api_keys.authentication.KeyAwareSessionAuthentication",
+        "api_keys.authentication.APIKeyAuthentication",
+    ],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
 }
