@@ -1,3 +1,4 @@
+import {geometryError} from './geometryValidation';
 export const resources = {
   measurements: {label:'Measurements', fields:[['name','Name','text',true],['description','Description','textarea'],['physical_device','Physical Device','physical-devices',true],['network_element','Network Element','network-elements',true],['measurement_type','Measurement Type','measurement-types',true],['measurement_unit','Measurement Unit','measurement-units',true],['customer_account','Customer Account'],['meter_account','Meter Account'],['data_collection_config','Collection Config (JSON)','json']]},
   'physical-devices': {label:'Physical Devices',fields:[['name','Name','text',true],['description','Description','textarea'],['device_type','Device Type','physical-device-types',true],['location','Location (GeoJSON Point)','geo']]},
@@ -23,6 +24,7 @@ export function parseRecordForm(resource, form, department, editing=false){
       try{result[key]=JSON.parse(raw);}catch{throw Error(`${key} must contain valid JSON.`);}
       if(type==='geo'){
         const g=result[key];if(!g||!['Point','LineString','Polygon'].includes(g.type)||resource==='physical-devices'&&g.type!=='Point')throw Error('Unsupported geometry.');
+        const error=geometryError(g);if(error)throw Error(error);
       }
       if(key==='external_identifiers'&&!Array.isArray(result[key]))throw Error('External identifiers must be an array.');
     }else result[key]=raw;
@@ -49,4 +51,17 @@ export function safeSpreadsheetText(value){
 export function csvFromRows(rows,fields){
  const escape=value=>`"${safeSpreadsheetText(value).replaceAll('"','""')}"`;
  return [fields.map(escape).join(','),...rows.map(row=>fields.map(f=>escape(row[f])).join(','))].join('\r\n');
+}
+
+export function geographicRecords(lists){
+ const label=(kind,id)=>(lists[kind]||[]).find(row=>row.id===id)?.name||String(id??'');
+ return {
+  'physical-devices':(lists['physical-devices']||[]).map(row=>({...row,
+   latitude:row.location?.coordinates?.[1],longitude:row.location?.coordinates?.[0],
+   active:row.is_active,type:label('physical-device-types',row.device_type),externalId:`Device #${row.id}`})),
+  'network-elements':(lists['network-elements']||[]).map(row=>({...row,
+   latitude:row.geometry?.coordinates?.[1],longitude:row.geometry?.coordinates?.[0],
+   geometryType:row.geometry?.type||'Point',active:row.is_active,type:label('network-element-types',row.element_type),
+   externalId:(row.external_identifiers||[]).map(pair=>`${pair.source}: ${pair.value}`).join(', ')||`Network Element #${row.id}`})),
+ };
 }

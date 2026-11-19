@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {parseRecordForm,csvFromRows} from './backendModel';
+import {parseRecordForm,csvFromRows,geographicRecords} from './backendModel';
 describe('Django serializer mapping',()=>{
  it.each([undefined, '', '   '])('omits blank external identifiers on create (%s)', external_identifiers => {
   const dto=parseRecordForm('network-elements',{name:'Site',element_type:'1',external_identifiers},'2');
@@ -43,4 +43,16 @@ describe('CSV formula protection',()=>{
  it('retains literal text, quotes and unicode',()=>{
   expect(csvFromRows([{name:'Σταθμός "A"'}],['name'])).toContain('"Σταθμός ""A"""');
  });
+});
+
+
+it('rejects coordinates that the map cannot render before submitting',()=>{
+ expect(()=>parseRecordForm('physical-devices',{name:'Sensor',device_type:'1',location:JSON.stringify({type:'Point',coordinates:[200,35]})},2)).toThrow('WGS84');
+});
+
+
+it('maps actual Django GeoJSON and identifiers without changing record identities',()=>{
+ const records=geographicRecords({'physical-devices':[{id:1,device_type:2,location:{type:'Point',coordinates:[33,35]},is_active:true}], 'physical-device-types':[{id:2,name:'Meter'}], 'network-elements':[{id:1,geometry:{type:'LineString',coordinates:[[33,35],[34,36]]},external_identifiers:[{source:'ERP',value:'node'}]}]});
+ expect(records['physical-devices'][0]).toMatchObject({id:1,latitude:35,longitude:33,type:'Meter'});
+ expect(records['network-elements'][0]).toMatchObject({id:1,geometryType:'LineString',externalId:'ERP: node'});
 });
