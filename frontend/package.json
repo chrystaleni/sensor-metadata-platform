@@ -10,7 +10,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "test": "vitest"
+    "test": "vitest",
+    "test:e2e": "playwright test --config e2e/playwright.config.js"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
