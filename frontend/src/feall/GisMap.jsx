@@ -68,7 +68,7 @@ export default function GisMap({records}){
       <aside className="gis-sidebar">
         <h3>Geographic records</h3><p className="gis-muted">Select a record to zoom to its location or shape.</p>
         {visible.length===0&&<p className="gis-muted">No records match these filters.</p>}
-        <div className="gis-records">{visible.map(f=><button key={featureKey(f)} className={`gis-record ${selected===f.properties.id?'selected':''}`} onClick={()=>focus(f)}>
+        <div className="gis-records">{visible.map(f=><button key={featureKey(f)} className={`gis-record ${selected===featureKey(f)?'selected':''}`} onClick={()=>focus(f)}>
           <strong>{f.properties.name}</strong><small>{f.properties.kind} · {f.geometry.type} · {f.properties.active?'Active':'Inactive'}</small>
         </button>)}</div>
         {current&&<div className="gis-details"><h3>Selected metadata</h3><dl>
@@ -76,9 +76,9 @@ export default function GisMap({records}){
           <dt>Record type</dt><dd>{current.properties.kind}</dd><dt>Classification</dt><dd>{current.properties.type}</dd>
           <dt>Geometry</dt><dd>{current.geometry.type}</dd><dt>Status</dt><dd>{current.properties.active?'Active':'Inactive'}</dd>
         </dl></div>}
-        {invalidVisible.length>0&&<div className="gis-warning"><strong>{invalidVisible.length} record(s) cannot be mapped</strong><p>Missing or invalid WGS84 geographic information:</p><ul>{invalidVisible.map(r=><li key={r.id}>{r.name}</li>)}</ul></div>}
+        {invalidVisible.length>0&&<div className="gis-warning"><strong>{invalidVisible.length} record(s) cannot be mapped</strong><p>Missing or invalid WGS84 geographic information:</p><ul>{invalidVisible.map(r=><li key={`${records['physical-devices']?.includes(r)?'device':'network'}:${r.id}`}>{r.name}</li>)}</ul></div>}
       </aside>
     </div>
-    <p className="gis-footnote">Map tiles © OpenStreetMap contributors. Geographic records are sample data until backend integration.</p>
+    <p className="gis-footnote">Map tiles © OpenStreetMap contributors. Geographic records come from the authorized backend dataset. Basemap tiles require internet access.</p>
   </section>
 }

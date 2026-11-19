@@ -1,19 +1,9 @@
 import {geometryError} from './geometryValidation';
-const LEAFLET_JS='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-const LEAFLET_CSS='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+import 'leaflet/dist/leaflet.css';
 let loader;
 export function loadLeaflet(){
   if(window.L?.map)return Promise.resolve(window.L);
-  if(loader)return loader;
-  loader=new Promise((resolve,reject)=>{
-    if(!document.querySelector('[data-leaflet-css]')){
-      const link=document.createElement('link');link.rel='stylesheet';link.href=LEAFLET_CSS;link.dataset.leafletCss='true';document.head.appendChild(link);
-    }
-    const script=document.createElement('script');script.src=LEAFLET_JS;script.async=true;
-    script.onload=()=>window.L?.map?resolve(window.L):reject(new Error('Map library could not start'));
-    script.onerror=()=>reject(new Error('Map library could not load. Check your internet connection.'));
-    document.head.appendChild(script);
-  }).catch(error=>{loader=null;throw error});
+  if(!loader)loader=import('leaflet').then(module=>{window.L=module.default||module;return window.L;}).catch(error=>{loader=null;throw error});
   return loader;
 }
 function pointCoordinates(row){

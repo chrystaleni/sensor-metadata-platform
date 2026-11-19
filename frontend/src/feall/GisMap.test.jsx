@@ -17,6 +17,8 @@ describe('GIS resource identities',()=>{
   fireEvent.click(screen.getByRole('button',{name:/Network Network Element/}));
   expect(screen.getByText('Selected metadata').parentElement.querySelector('dd').textContent).toBe('Network');
   expect(mocks.fit.mock.calls.at(-1)[0].name).toBe('Network');
+  expect(screen.getByRole('button',{name:/Network Network Element/})).toHaveClass('selected');
+  expect(screen.getByRole('button',{name:/Device Physical Device/})).not.toHaveClass('selected');
   fireEvent.click(screen.getByRole('button',{name:/Device Physical Device/}));
   expect(screen.getByText('Selected metadata').parentElement.querySelector('dd').textContent).toBe('Device');
   expect(mocks.fit.mock.calls.at(-1)[0].name).toBe('Device');
