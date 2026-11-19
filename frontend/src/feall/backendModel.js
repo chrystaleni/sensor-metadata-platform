@@ -41,7 +41,12 @@ export function formatApiError(error){
  }
  return error?.message||'Request failed.';
 }
+export function safeSpreadsheetText(value){
+ const text=String(value==null?'':typeof value==='object'?JSON.stringify(value):value);
+ // Quoting CSV is syntax escaping, not protection against formula evaluation.
+ return /^[\s\uFEFF]*[=+@-]/u.test(text)||/^[\t\r\n]/u.test(text)?`'${text}`:text;
+}
 export function csvFromRows(rows,fields){
- const escape=value=>`"${String(value==null?'':typeof value==='object'?JSON.stringify(value):value).replaceAll('"','""')}"`;
+ const escape=value=>`"${safeSpreadsheetText(value).replaceAll('"','""')}"`;
  return [fields.map(escape).join(','),...rows.map(row=>fields.map(f=>escape(row[f])).join(','))].join('\r\n');
 }

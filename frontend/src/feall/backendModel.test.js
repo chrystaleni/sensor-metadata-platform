@@ -35,3 +35,12 @@ describe('Django serializer mapping',()=>{
  it('rejects invalid JSON',()=>expect(()=>parseRecordForm('network-elements',{name:'A',element_type:1,geometry:'bad'},2)).toThrow(/valid JSON/));
  it('escapes CSV formulas as plain quoted data',()=>expect(csvFromRows([{name:'A,"B"'}],['name'])).toContain('"A,""B"""'));
 });
+
+describe('CSV formula protection',()=>{
+ it.each(['=1+1','+SUM(1,2)','-1+2','@SUM(1,2)','  =1+1','\t=1+1','\r=1+1','\n=1+1'])('neutralizes spreadsheet formulas %j',name=>{
+  expect(csvFromRows([{name}],['name']).split('\r\n')[1]).toBe(`"'${name}"`);
+ });
+ it('retains literal text, quotes and unicode',()=>{
+  expect(csvFromRows([{name:'Σταθμός "A"'}],['name'])).toContain('"Σταθμός ""A"""');
+ });
+});
