@@ -16,12 +16,15 @@ org = Organisation.objects.create(code='e2e-north',name='E2E North Organisation'
 other = Organisation.objects.create(code='e2e-south',name='E2E South Organisation')
 north = Department.objects.create(name='E2E North',organisation=org)
 south = Department.objects.create(name='E2E South',organisation=other)
+east = Department.objects.create(name='E2E East',organisation=org)
 for model, name in ((PhysicalDeviceType,'E2E Device Type'),(NetworkElementType,'E2E Element Type'),(MeasurementType,'E2E Measurement Type'),(MeasurementUnit,'E2E Unit')):
     model.objects.create(name=name,department=platform)
 for username,role in (('e2e-admin','DEPARTMENT_ADMIN'),('e2e-viewer','VIEWER')):
     user=get_user_model().objects.create_user(username=username,password=os.environ['E2E_PASSWORD'])
     UserRole.objects.create(user=user,role=role)
     UserDepartment.objects.create(user=user,department=north)
+    if username=='e2e-admin':UserDepartment.objects.create(user=user,department=east)
+PhysicalDevice.objects.create(name='Restricted East Device',department=east,device_type=PhysicalDeviceType.objects.get(name='E2E Device Type'))
 PhysicalDevice.objects.create(name='Restricted South Device',department=south,device_type=PhysicalDeviceType.objects.get(name='E2E Device Type'))
 print('Disposable E2E fixtures created; no credentials are printed.')
 

@@ -29,12 +29,29 @@ test('real session, relational CRUD, persistence, GIS, export and scoped API key
   await choose(dialog,'Device Type *','E2E Device Type');
   await dialog.getByLabel('Location (GeoJSON Point)',{exact:true}).fill('{"type":"Point","coordinates":[33.36,35.15]}');
  });
- await page.reload();await expect(page.getByRole('cell',{name:'E2E Device',exact:true})).toBeVisible();
+ const deviceRow=page.getByRole('row').filter({has:page.getByRole('cell',{name:'E2E Device',exact:true})});
+ await deviceRow.getByRole('button',{name:'Edit',exact:true}).click();
+ await page.getByRole('dialog').getByLabel('Description',{exact:true}).fill('Updated via browser');
+ await page.getByRole('button',{name:'Save to Django'}).click();
+ await expect(page.getByRole('cell',{name:'Updated via browser',exact:true})).toBeVisible();
+ await page.reload();await expect(page.getByRole('cell',{name:'Updated via browser',exact:true})).toBeVisible();
+ const department=page.getByLabel('Department',{exact:true});const north=await department.inputValue();
+ const east=await department.locator('option').filter({hasText:'E2E East'}).getAttribute('value');
+ await department.selectOption(east);await expect(page.getByRole('cell',{name:'Restricted East Device',exact:true})).toBeVisible();
+ await expect(page.getByRole('cell',{name:'E2E Device',exact:true})).not.toBeVisible();
+ await department.selectOption(north);await expect(page.getByRole('cell',{name:'E2E Device',exact:true})).toBeVisible();
+ await page.getByLabel('Search records').fill('missing-e2e-record');await expect(page.getByText('No matching backend records.')).toBeVisible();
+ await page.getByLabel('Search records').fill('E2E');await expect(page.getByRole('cell',{name:'E2E Device',exact:true})).toBeVisible();
  await create(page,'Network Elements','E2E Element',async dialog=>{
   await choose(dialog,'Element Type *','E2E Element Type');
   await dialog.getByLabel('Geometry (GeoJSON)',{exact:true}).fill('{"type":"LineString","coordinates":[[33.36,35.15],[33.37,35.16]]}');
   await dialog.getByLabel('External Identifiers (JSON array; blank preserves, [] clears)',{exact:true}).fill('[{"source":"e2e","value":"node-1"}]');
  });
+ const elementRow=page.getByRole('row').filter({has:page.getByRole('cell',{name:'E2E Element',exact:true})});
+ await elementRow.getByRole('button',{name:'Edit',exact:true}).click();
+ await page.getByRole('dialog').getByLabel('Description',{exact:true}).fill('Updated network element');
+ await page.getByRole('dialog').getByLabel('Geometry (GeoJSON)',{exact:true}).fill('{"type":"Polygon","coordinates":[[[33,35],[34,35],[34,36],[33,35]]]}');
+ await page.getByRole('button',{name:'Save to Django'}).click();await expect(page.getByRole('cell',{name:'Updated network element',exact:true})).toBeVisible();
  await create(page,'Measurements','E2E Measurement',async dialog=>{
   await choose(dialog,'Physical Device *','E2E Device');await choose(dialog,'Network Element *','E2E Element');
   await choose(dialog,'Measurement Type *','E2E Measurement Type');await choose(dialog,'Measurement Unit *','E2E Unit');
@@ -44,6 +61,7 @@ test('real session, relational CRUD, persistence, GIS, export and scoped API key
  await row.getByRole('button',{name:'Edit',exact:true}).click();
  await page.getByRole('dialog').getByLabel('Name *',{exact:true}).fill('E2E Updated Measurement');
  await page.getByRole('button',{name:'Save to Django'}).click();await expect(page.getByRole('cell',{name:'E2E Updated Measurement',exact:true})).toBeVisible();
+ const measurementId=await page.getByRole('row').filter({has:page.getByRole('cell',{name:'E2E Updated Measurement',exact:true})}).getByRole('cell').first().textContent();
  await page.getByRole('link',{name:'GIS Map',exact:true}).click();
  await expect(page.getByLabel('Interactive geographic map')).toHaveClass(/leaflet-container/);
  await expect(page.getByRole('button',{name:/E2E Device.*Physical Device/})).toBeVisible();
@@ -60,11 +78,18 @@ test('real session, relational CRUD, persistence, GIS, export and scoped API key
  await page.getByRole('link',{name:'Excel Import/Export',exact:true}).click();
  const download=page.waitForEvent('download');await page.getByRole('button',{name:'Download XLSX'}).click();
  const exported=await download;expect(exported.suggestedFilename()).toBe('measurements.xlsx');
+ execFileSync(process.env.E2E_PYTHON,['-c',"import sys; from openpyxl import load_workbook; w=load_workbook(sys.argv[1],read_only=True); assert any('E2E Updated Measurement' in row for row in w.active.iter_rows(values_only=True)); w.close()",await exported.path()],{stdio:'pipe'});
+ await page.getByLabel('Export format').selectOption('csv');const csvDownload=page.waitForEvent('download');
+ await page.getByRole('button',{name:'Download CSV'}).click();expect((await csvDownload).suggestedFilename()).toBe('measurements.csv');
  await page.getByRole('link',{name:'API Keys',exact:true}).click();await page.getByLabel('Key name').fill('E2E SCADA');
  await page.getByRole('button',{name:'Create API key',exact:true}).click();
  const key=await page.locator('code').filter({hasText:/^smk_/}).textContent();
  const response=await page.request.get('/api/v1/physical-devices/',{headers:{'X-API-Key':key}});
- expect(response.status()).toBe(200);expect(JSON.stringify(await response.json())).not.toContain('Restricted South');
+ expect(response.status()).toBe(200);const data=JSON.stringify(await response.json());expect(data).not.toContain('Restricted South');expect(data).not.toContain('Restricted East');
+ expect((await page.request.get(`/api/v1/physical-devices/${process.env.E2E_EAST_DEVICE_ID}/`)).status()).toBe(200);
+ expect((await page.request.get(`/api/v1/physical-devices/${process.env.E2E_EAST_DEVICE_ID}/`,{headers:{'X-API-Key':key}})).status()).toBe(404);
+ const configuration=await page.request.get(`/api/v1/measurements/${measurementId}/`,{headers:{'X-API-Key':key}});
+ expect(configuration.status()).toBe(200);expect((await configuration.json()).data_collection_config).toEqual({protocol:'https',extra_settings:{poll_seconds:60}});
  expect((await page.request.post('/api/v1/physical-devices/',{headers:{'X-API-Key':key},data:{}})).status()).toBe(403);
  await page.getByRole('button',{name:'Revoke E2E SCADA'}).click();
  await expect(page.getByRole('button',{name:'Revoke E2E SCADA'})).not.toBeVisible();
@@ -79,7 +104,7 @@ test('real session, relational CRUD, persistence, GIS, export and scoped API key
 });
 
 test('viewer controls and cross-Organisation isolation are enforced by Django',async({page})=>{
- await login(page,'e2e-viewer');await page.getByRole('link',{name:'Physical Devices',exact:true}).click();
+ await login(page,'e2e-viewer');await expect(page.getByLabel('Department',{exact:true})).not.toContainText('E2E East');await page.getByRole('link',{name:'Physical Devices',exact:true}).click();
  await expect(page.getByRole('button',{name:'+ Add',exact:true})).not.toBeVisible();
  const response=await page.request.get('/api/v1/physical-devices/');expect(response.status()).toBe(200);
  expect(JSON.stringify(await response.json())).not.toContain('Restricted South Device');

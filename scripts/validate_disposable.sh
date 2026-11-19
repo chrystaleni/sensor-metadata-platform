@@ -80,6 +80,7 @@ export E2E_IMPORT_WORKBOOK="$RESULTS/import.xlsx"
 cd "$REPO_ROOT/backend"
 "$PYTHON" manage.py shell -c 'exec(open("../scripts/seed_disposable.py").read())' >"$RESULTS/seed.log" 2>&1
 export METADATA_PLATFORM_DEPARTMENT_ID=$("$PYTHON" manage.py shell -c 'from local_departments.models import Department; print(Department.objects.get(organisation__code="platform").pk)' | tail -1)
+export E2E_EAST_DEVICE_ID=$("$PYTHON" manage.py shell -c 'from metadata.models import PhysicalDevice; print(PhysicalDevice.objects.get(name="Restricted East Device").pk)' | tail -1)
 export E2E_SOUTH_DEVICE_ID=$("$PYTHON" manage.py shell -c 'from metadata.models import PhysicalDevice; print(PhysicalDevice.objects.get(name="Restricted South Device").pk)' | tail -1)
 # Let the OS select temporary loopback ports. The readiness nonce and owned process checks reject reused ports.
 BACKEND_PORT=$("$PYTHON" -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')
