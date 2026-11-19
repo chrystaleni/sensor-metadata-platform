@@ -13,7 +13,7 @@ export function makeApiClient({ baseUrl, fetchImpl = fetch, csrf = () => '' }) {
   const root = baseUrl.replace(/\/+$/, '');
   return async function request(path, { method = 'GET', data, signal, params } = {}) {
     if (!/^\/[\w/-]*\/?$/.test(path)) throw new Error('Invalid API path.');
-    const url = new URL(root + path, 'http://localhost');
+    const url = new URL(root + path, globalThis.location?.href);
     if (params) Object.entries(params).forEach(([key, value]) => {
       if (value !== '' && value !== null && value !== undefined) url.searchParams.set(key, String(value));
     });

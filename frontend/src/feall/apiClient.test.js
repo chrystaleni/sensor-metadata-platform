@@ -1,7 +1,27 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, afterEach } from 'vitest';
 import { ApiError, makeApiClient, normalizePage } from './apiClient';
 
 describe('Django API transport', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it.each(['http://localhost:5173', 'https://sensors.example.test'])('keeps relative API requests on %s', async origin => {
+    vi.stubGlobal('location', { href: `${origin}/workspace/` });
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ results: [], count: 0 }) });
+    const request = makeApiClient({ baseUrl: '/api/v1', fetchImpl });
+    await request('/measurements/', { params: { search: 'flow', page: 2 } });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      `${origin}/api/v1/measurements/?search=flow&page=2`,
+      expect.objectContaining({ credentials: 'include' }),
+    );
+  });
+
+  it('preserves an explicitly configured API origin', async () => {
+    vi.stubGlobal('location', { href: 'https://frontend.example.test/' });
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ results: [] }) });
+    await makeApiClient({ baseUrl: 'https://backend.example.test/api/v1/', fetchImpl })('/network-elements/');
+    expect(fetchImpl.mock.calls[0][0]).toBe('https://backend.example.test/api/v1/network-elements/');
+  });
+
   it('uses cookies and CSRF for mutations', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 201, json: async () => ({ id: 1 }) });
     const request = makeApiClient({ baseUrl: 'http://localhost:8000/api/', fetchImpl, csrf: () => 'token' });
