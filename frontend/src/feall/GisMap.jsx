@@ -1,7 +1,7 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import './gis.css';
 
-import {loadLeaflet,buildMapFeatures} from './mapUtils';
+import {loadLeaflet,buildMapFeatures,featureKey} from './mapUtils';
 
 export default function GisMap({records}){
   const mapElement=useRef(null),mapRef=useRef(null),layerRef=useRef(null),featureLayers=useRef({});
@@ -36,19 +36,19 @@ export default function GisMap({records}){
         pointToLayer:(_,latlng)=>L.circleMarker(latlng,{radius:9,color:'#fff',weight:2,fillColor:color,fillOpacity:0.95}),
         style:{color,weight:4,fillColor:color,fillOpacity:0.25}
       });
-      layer.on('click',()=>setSelected(p.id));
+      layer.on('click',()=>setSelected(featureKey(feature)));
       const tooltipText=document.createTextNode(`${p.name} · ${p.kind}`);
       layer.bindTooltip(tooltipText,{sticky:true});
-      layer.addTo(group);featureLayers.current[p.id]=layer;
+      layer.addTo(group);featureLayers.current[featureKey(feature)]=layer;
     }
     if(group.getLayers().length&&group.getBounds().isValid())mapRef.current.fitBounds(group.getBounds().pad(0.25),{maxZoom:15,animate:false});
     mapRef.current.invalidateSize();
   },[ready,visible]);
-  const current=visible.find(f=>f.properties.id===selected);
+  const current=visible.find(f=>featureKey(f)===selected);
   const fitAll=()=>{const group=layerRef.current;if(group?.getLayers().length&&group.getBounds().isValid())mapRef.current?.fitBounds(group.getBounds().pad(0.25),{maxZoom:15});};
   const focus=(feature)=>{
-    setSelected(feature.properties.id);
-    const layer=featureLayers.current[feature.properties.id];
+    setSelected(featureKey(feature));
+    const layer=featureLayers.current[featureKey(feature)];
     if(layer&&mapRef.current){const bounds=layer.getBounds();if(bounds.isValid())mapRef.current.fitBounds(bounds.pad(0.8),{maxZoom:15});}
   };
   return <section className="fe-panel">
@@ -68,7 +68,7 @@ export default function GisMap({records}){
       <aside className="gis-sidebar">
         <h3>Geographic records</h3><p className="gis-muted">Select a record to zoom to its location or shape.</p>
         {visible.length===0&&<p className="gis-muted">No records match these filters.</p>}
-        <div className="gis-records">{visible.map(f=><button key={f.properties.id} className={`gis-record ${selected===f.properties.id?'selected':''}`} onClick={()=>focus(f)}>
+        <div className="gis-records">{visible.map(f=><button key={featureKey(f)} className={`gis-record ${selected===f.properties.id?'selected':''}`} onClick={()=>focus(f)}>
           <strong>{f.properties.name}</strong><small>{f.properties.kind} · {f.geometry.type} · {f.properties.active?'Active':'Inactive'}</small>
         </button>)}</div>
         {current&&<div className="gis-details"><h3>Selected metadata</h3><dl>

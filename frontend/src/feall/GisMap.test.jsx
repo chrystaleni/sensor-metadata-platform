@@ -1,0 +1,24 @@
+import {render,screen,fireEvent,waitFor} from '@testing-library/react';
+import {describe,it,expect,vi} from 'vitest';
+const mocks=vi.hoisted(()=>({fit:vi.fn()}));
+vi.mock('./mapUtils',async importOriginal=>{
+ const actual=await importOriginal();
+ const bounds=name=>({name,isValid:()=>true,pad(){return this}});
+ const group={layers:[],clearLayers(){this.layers=[]},getLayers(){return this.layers},getBounds:()=>bounds('all'),addTo(){return this}};
+ const L={map:()=>({setView(){return this},fitBounds:mocks.fit,invalidateSize(){},remove(){}}),tileLayer:()=>({addTo(){}}),featureGroup:()=>group,
+  geoJSON:f=>({on(){return this},bindTooltip(){return this},addTo(g){g.layers.push(this);return this},getBounds:()=>bounds(f.properties.name)})};
+ return {...actual,loadLeaflet:async()=>{window.L=L;return L}};
+});
+import GisMap from './GisMap';
+describe('GIS resource identities',()=>{
+ it('selects and zooms the correct resource when numeric IDs collide',async()=>{
+  render(<GisMap records={{'physical-devices':[{id:1,name:'Device',latitude:35,longitude:33}], 'network-elements':[{id:1,name:'Network',geometryType:'Point',latitude:35,longitude:34}]}}/>);
+  await waitFor(()=>expect(screen.queryByText('Loading interactive map…')).not.toBeInTheDocument());
+  fireEvent.click(screen.getByRole('button',{name:/Network Network Element/}));
+  expect(screen.getByText('Selected metadata').parentElement.querySelector('dd').textContent).toBe('Network');
+  expect(mocks.fit.mock.calls.at(-1)[0].name).toBe('Network');
+  fireEvent.click(screen.getByRole('button',{name:/Device Physical Device/}));
+  expect(screen.getByText('Selected metadata').parentElement.querySelector('dd').textContent).toBe('Device');
+  expect(mocks.fit.mock.calls.at(-1)[0].name).toBe('Device');
+ });
+});

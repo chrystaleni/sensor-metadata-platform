@@ -45,3 +45,6 @@ export function buildMapFeatures(records){
   }
   return {features,invalid};
 }
+
+// Database IDs are unique per table, not across geographic resources.
+export const featureKey = feature => `${feature.properties.kind}:${feature.properties.id}`;
