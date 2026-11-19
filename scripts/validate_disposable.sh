@@ -49,6 +49,11 @@ if ! docker exec "$CONTAINER_ID" psql -U "$POSTGRES_USER" -d postgres -Atc "SELE
 fi
 docker exec "$CONTAINER_ID" psql -U "$POSTGRES_USER" -d template_postgis -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS postgis;' >>"$RESULTS/database-init.log" 2>&1
 export PYTHONDONTWRITEBYTECODE=1 DJANGO_DATABASE_ENGINE=postgis DJANGO_DEBUG=False
+# Do not inherit deployment cookie rules or frontend URLs from a local .env.
+export DJANGO_SECURE_COOKIES=false
+export SESSION_IDLE_TIMEOUT_SECONDS=1800 SESSION_ABSOLUTE_TIMEOUT_SECONDS=28800
+export LOGIN_FAILURE_LIMIT=5 LOGIN_FAILURE_WINDOW_SECONDS=900
+export VITE_API_BASE_URL=/api/v1 VITE_EXCEL_IMPORT_URL=/api/v1/imports/excel/
 export DJANGO_SECRET_KEY=$("$PYTHON" -c 'import secrets; print(secrets.token_urlsafe(64))')
 export DJANGO_SETTINGS_MODULE=config.settings
 export DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,testserver
