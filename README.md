@@ -32,7 +32,7 @@ The system follows a three-tier modular monolith architecture: a React/Vite fron
 
 ## Development status
 
-The Django backend implements metadata management for Measurements, Physical Devices and Network Elements. Argyris's contribution includes shared controlled lists, PostGIS geometry, search and filtering, atomic Excel import and audited logical deletion. See the [backend handover](docs/development/argyris-backend.md) for setup, API examples, validation results and the shared security integration boundary. The React frontend is initialized; authentication, production authorization and the final frontend integration are separate team work.
+The Django backend implements metadata management for Measurements, Physical Devices and Network Elements. Argyris's contribution includes shared controlled lists, PostGIS geometry, search and filtering, atomic Excel import and audited logical deletion. See the [backend handover](docs/development/argyris-backend.md) for setup, API examples, validation results and the shared security integration boundary. This local integration branch also incorporates the existing Organisation, session/role/membership and React implementations, scoped API keys and full Compose services. Read the [integration and validation guide](docs/development/phase3-integration.md) before starting. Full PostGIS/E2E validation of the combined branch remains required; historical passing results are not proof of this revision.
 
 ## Frontend development
 
@@ -84,6 +84,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 python manage.py check
+# Fresh database only; existing data requires the approved Organisation backfill.
 python manage.py migrate
 ```
 
@@ -109,7 +110,7 @@ Stop Docker without deleting the database data with `docker compose stop db` or 
 
 ## Metadata integration configuration
 
-The metadata API defaults to `metadata.access.NoAccessPolicy`. A session alone does not grant metadata access; Chrystaleni's adapter supplies Department scopes and shared-list management permission. The current project does not register login/logout or an explicit CSRF-bootstrap URL.
+The metadata API defaults to `metadata.access.NoAccessPolicy`. A session alone does not grant metadata access; Chrystaleni's adapter supplies Department scopes and shared-list management permission. Session, CSRF bootstrap, login/logout and capability context endpoints are registered; see the [session contract](docs/development/session-authentication.md).
 
 PR #31 changes `METADATA_PLATFORM_DEPARTMENT_ID` from an implicit ID 1 to explicit configuration. With that change present, set the approved existing Platform Department ID in the root `.env`. Missing, invalid, non-positive or out-of-range values leave Platform unconfigured. A setting does not create a Department, move catalog values or grant access.
 
@@ -117,8 +118,10 @@ The optional demo fixtures use Platform ID 1 only in an empty isolated demo data
 
 `METADATA_DEPARTMENT_MODEL` defaults to `local_departments.Department`. Agree the shared model and migration strategy before using a shared database. `METADATA_ACCESS_POLICY` must point to the team's real installed adapter for authorized metadata workflows.
 
-See the [API contract and permission boundary](docs/development/argyris-api-examples.md), [backend handover](docs/development/argyris-backend.md) and [database upgrade runbook](docs/development/argyris-database.md). PR #31 and the PR #32 replacement migration were still separate open PRs at the 17 November 2026 review; verify which revision is checked out before following their new behavior.
+See the [API contract and permission boundary](docs/development/argyris-api-examples.md), [backend handover](docs/development/argyris-backend.md) and [database upgrade runbook](docs/development/argyris-database.md). The local integration retains the PR #31 explicit configuration and PR #32 replacement migration. Follow the [integration guide](docs/development/phase3-integration.md) for Organisation backfill, role provisioning, safe Compose startup and disposable validation.
 
 ## Continuous integration
 
 GitHub Actions runs automated checks on every branch push, on pull requests targeting `main`, and when manually started with `workflow_dispatch`. The backend job installs `backend/requirements.txt`, runs Django's system check, applies migrations, checks for missing migrations and runs pytest. The frontend job installs from `frontend/package-lock.json`, then runs the test suite, ESLint, and a production build. Team members can view workflow runs in the repository's **Actions** tab or check results on a pull request.
+
+The local integration additionally configures real browser–Django–PostGIS validation in the backend job, using a new disposable container and retaining test evidence. This updated workflow has not executed remotely until the branch is pushed.

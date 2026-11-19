@@ -19,7 +19,18 @@ DEBUG = os.environ.get("DJANGO_DEBUG", "True").strip().lower() in {
     "yes",
     "on",
 }
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
+if not DEBUG and SECRET_KEY == "django-insecure-local-development-only-change-me":
+    raise ImproperlyConfigured("Set DJANGO_SECRET_KEY when DJANGO_DEBUG=False.")
+ALLOWED_HOSTS = [value.strip() for value in os.environ.get(
+    "DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,testserver"
+).split(",") if value.strip()]
+CSRF_TRUSTED_ORIGINS = [value.strip() for value in os.environ.get(
+    "DJANGO_CSRF_TRUSTED_ORIGINS", ""
+).split(",") if value.strip()]
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_SECURE = os.environ.get("DJANGO_SECURE_COOKIES", "false").lower() == "true"
+CSRF_COOKIE_SECURE = SESSION_COOKIE_SECURE
 
 DATABASE_ENGINE = os.environ.get("DJANGO_DATABASE_ENGINE", "postgis").strip().lower()
 USE_POSTGIS = DATABASE_ENGINE in {"postgis", "postgres", "postgresql"}
@@ -39,6 +50,8 @@ INSTALLED_APPS = [
     "core",
     "local_departments",
     "metadata",
+    "platform_security",
+    "api_keys",
 ]
 
 if USE_POSTGIS:
@@ -50,6 +63,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "platform_security.session_expiry.SessionExpiryMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -112,6 +126,24 @@ elif DATABASE_ENGINE in {"postgis", "postgres", "postgresql"}:
 
 AUTH_PASSWORD_VALIDATORS = []
 
+try:
+    LOGIN_FAILURE_LIMIT = int(os.environ.get("LOGIN_FAILURE_LIMIT", "5"))
+    LOGIN_FAILURE_WINDOW_SECONDS = int(os.environ.get("LOGIN_FAILURE_WINDOW_SECONDS", "900"))
+except ValueError as error:
+    raise ImproperlyConfigured("Login throttling settings must be integers.") from error
+if not 0 < LOGIN_FAILURE_LIMIT <= 2**31 - 1 or not 0 < LOGIN_FAILURE_WINDOW_SECONDS <= 2**31 - 1:
+    raise ImproperlyConfigured("Login throttling settings must be positive 32-bit integers.")
+
+try:
+    SESSION_IDLE_TIMEOUT_SECONDS = int(os.environ.get("SESSION_IDLE_TIMEOUT_SECONDS", "1800"))
+    SESSION_ABSOLUTE_TIMEOUT_SECONDS = int(os.environ.get("SESSION_ABSOLUTE_TIMEOUT_SECONDS", "28800"))
+except ValueError as error:
+    raise ImproperlyConfigured("Session timeout settings must be integers.") from error
+if not 0 < SESSION_IDLE_TIMEOUT_SECONDS <= SESSION_ABSOLUTE_TIMEOUT_SECONDS:
+    raise ImproperlyConfigured("Session timeouts require 0 < idle timeout <= absolute timeout.")
+if SESSION_ABSOLUTE_TIMEOUT_SECONDS > 2**31 - 1:
+    raise ImproperlyConfigured("The absolute session timeout must fit in a positive 32-bit integer.")
+
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_I18N = True
@@ -140,6 +172,9 @@ REST_FRAMEWORK = {
         "rest_framework.parsers.FormParser",
         "rest_framework.parsers.MultiPartParser",
     ],
-    "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.SessionAuthentication"],
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "api_keys.authentication.KeyAwareSessionAuthentication",
+        "api_keys.authentication.APIKeyAuthentication",
+    ],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
 }

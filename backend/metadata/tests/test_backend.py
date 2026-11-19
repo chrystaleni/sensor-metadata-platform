@@ -584,6 +584,26 @@ class MetadataAPITests(APITestCase):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "example.xlsx"
             call_command("metadata_workbook", str(path), example=True, stdout=StringIO())
+
+            from openpyxl import load_workbook
+
+            workbook = load_workbook(path)
+            catalog_fields = {
+                "Physical Devices": {"device_type": self.catalog["device_type"]},
+                "Network Elements": {"element_type": self.catalog["element_type"]},
+                "Measurements": {
+                    "measurement_type": self.catalog["measurement_type"],
+                    "measurement_unit": self.catalog["measurement_unit"],
+                },
+            }
+            for sheet_name, fields in catalog_fields.items():
+                sheet = workbook[sheet_name]
+                headers = [cell.value for cell in sheet[1]]
+                for field, catalog_id in fields.items():
+                    sheet.cell(row=2, column=headers.index(field) + 1, value=catalog_id)
+            workbook.save(path)
+            workbook.close()
+
             response = self.client.post(
                 f"{API}imports/excel/",
                 {"department": 2, "file": SimpleUploadedFile(path.name, path.read_bytes())},

@@ -1,0 +1,52 @@
+import { describe, expect, it, vi, afterEach } from 'vitest';
+import { ApiError, makeApiClient, normalizePage } from './apiClient';
+
+describe('Django API transport', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it.each(['http://localhost:5173', 'https://sensors.example.test'])('keeps relative API requests on %s', async origin => {
+    vi.stubGlobal('location', { href: `${origin}/workspace/` });
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ results: [], count: 0 }) });
+    const request = makeApiClient({ baseUrl: '/api/v1', fetchImpl });
+    await request('/measurements/', { params: { search: 'flow', page: 2 } });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      `${origin}/api/v1/measurements/?search=flow&page=2`,
+      expect.objectContaining({ credentials: 'include' }),
+    );
+  });
+
+  it('preserves an explicitly configured API origin', async () => {
+    vi.stubGlobal('location', { href: 'https://frontend.example.test/' });
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ results: [] }) });
+    await makeApiClient({ baseUrl: 'https://backend.example.test/api/v1/', fetchImpl })('/network-elements/');
+    expect(fetchImpl.mock.calls[0][0]).toBe('https://backend.example.test/api/v1/network-elements/');
+  });
+
+  it('uses cookies and CSRF for mutations', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 201, json: async () => ({ id: 1 }) });
+    const request = makeApiClient({ baseUrl: 'http://localhost:8000/api/', fetchImpl, csrf: () => 'token' });
+    await request('/measurements/', { method: 'POST', data: { name: 'Meter' } });
+    expect(fetchImpl).toHaveBeenCalledWith('http://localhost:8000/api/measurements/', expect.objectContaining({
+      method: 'POST', credentials: 'include', body: JSON.stringify({ name: 'Meter' }),
+      headers: expect.objectContaining({ 'X-CSRFToken': 'token' }),
+    }));
+  });
+  it('forwards server filters and pagination', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ results: [], count: 0 }) });
+    const request = makeApiClient({ baseUrl: '/api', fetchImpl });
+    await request('/measurements/', { params: { search: 'abc', page: 2 } });
+    const url = new URL(fetchImpl.mock.calls[0][0]);
+    expect(url.searchParams.get('search')).toBe('abc');
+    expect(url.searchParams.get('page')).toBe('2');
+  });
+  it('preserves validation errors', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 400, json: async () => ({ name: ['Required'] }) });
+    const request = makeApiClient({ baseUrl: '/api', fetchImpl });
+    await expect(request('/measurements/')).rejects.toMatchObject({ status: 400, details: { name: ['Required'] } });
+  });
+  it('normalizes paginated and unpaginated lists', () => {
+    expect(normalizePage([{ id: 1 }]).count).toBe(1);
+    expect(normalizePage({ results: [], count: 10 }).count).toBe(10);
+    expect(() => normalizePage({ items: [] })).toThrow(ApiError);
+  });
+});
