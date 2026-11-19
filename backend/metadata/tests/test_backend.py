@@ -16,7 +16,7 @@ from django.test import override_settings
 from openpyxl import Workbook
 from rest_framework.test import APIClient, APITestCase, APITransactionTestCase
 
-from local_departments.models import Department
+from local_departments.models import Department, Organisation
 
 from ..access import NoAccessPolicy
 from ..models import (
@@ -54,9 +54,11 @@ class FixturePolicy(NoAccessPolicy):
 
 
 def create_catalog():
-    Department.objects.create(pk=1, name="Platform")
-    Department.objects.create(pk=2, name="North")
-    Department.objects.create(pk=3, name="South")
+    platform, _ = Organisation.objects.get_or_create(code="platform", defaults={"name": "Platform"})
+    demo = Organisation.objects.create(code="demo", name="Demo")
+    Department.objects.create(pk=1, name="Platform", organisation=platform)
+    Department.objects.create(pk=2, name="North", organisation=demo)
+    Department.objects.create(pk=3, name="South", organisation=demo)
     return {
         "device_type": PhysicalDeviceType.objects.create(department_id=1, name="Weather station").pk,
         "element_type": NetworkElementType.objects.create(department_id=1, name="Monitoring site").pk,
@@ -289,7 +291,8 @@ class MetadataAPITests(APITestCase):
         self.assertIn(self.client.get(f"{API}physical-devices/").status_code, (401, 403))
 
     def test_missing_or_nonexistent_platform_does_not_use_customer_department_one(self):
-        Department.objects.filter(pk=1).update(name="Customer Department")
+        customer = Organisation.objects.get(code="demo")
+        Department.objects.filter(pk=1).update(name="Customer Department", organisation=customer)
         catalog_path = f"{API}physical-device-types/"
         existing_pk = self.catalog["device_type"]
         existing_name = PhysicalDeviceType.objects.get(pk=existing_pk).name
@@ -300,9 +303,13 @@ class MetadataAPITests(APITestCase):
                 override_settings(METADATA_PLATFORM_DEPARTMENT_ID=platform_id),
             ):
                 self.client.force_authenticate(self.manager)
-                self.assertEqual(self.client.get(catalog_path).json()["count"], 0)
+                response = self.client.get(catalog_path)
+                self.assertEqual(response.status_code, 403, response.data)
+                self.assertIn("detail", response.data)
                 self.assertEqual(self.post("physical-device-types", {"name": "Pump"}).status_code, 403)
-                self.assertEqual(self.client.get(f"{catalog_path}{existing_pk}/").status_code, 404)
+                response = self.client.get(f"{catalog_path}{existing_pk}/")
+                self.assertEqual(response.status_code, 403, response.data)
+                self.assertIn("detail", response.data)
                 self.client.force_authenticate(self.editor)
                 response = self.post("physical-devices", {
                     "department": 2, "name": "Invalid", "device_type": existing_pk,
@@ -315,8 +322,12 @@ class MetadataAPITests(APITestCase):
 
     @override_settings(METADATA_PLATFORM_DEPARTMENT_ID=42)
     def test_explicit_platform_department_is_used_for_catalog_ownership_and_relationships(self):
-        Department.objects.filter(pk=1).update(name="Customer Department")
-        Department.objects.create(pk=42, name="Platform")
+        customer = Organisation.objects.get(code="demo")
+        Department.objects.filter(pk=1).update(name="Customer Department", organisation=customer)
+        platform = Organisation.objects.get(code="platform", name="Platform")
+        Department.objects.create(pk=42, name="Platform", organisation=platform)
+        for model in (MeasurementType, MeasurementUnit, PhysicalDeviceType, NetworkElementType):
+            model.objects.filter(department_id=1).update(department_id=42)
         self.client.force_authenticate(self.manager)
         response = self.post("physical-device-types", {"name": "Pump"})
         self.assertEqual(response.status_code, 201, response.data)
@@ -325,7 +336,15 @@ class MetadataAPITests(APITestCase):
         self.assertEqual(catalog_item.department_id, 42)
 
         self.client.force_authenticate(self.editor)
-        self.assertEqual(self.client.get(f"{API}physical-device-types/").json()["count"], 1)
+        response = self.client.get(f"{API}physical-device-types/")
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["count"], 2)
+        self.assertEqual(
+            {item["id"] for item in response.data["results"]},
+            {self.catalog["device_type"], catalog_item.pk},
+        )
+        self.assertEqual(Department.objects.get(pk=1).organisation_id, customer.pk)
+        self.assertEqual(list(Department.objects.filter(organisation=platform).values_list("pk", flat=True)), [42])
         response = self.post("physical-devices", {
             "department": 2, "name": "Pump station", "device_type": catalog_item.pk,
         })
@@ -333,11 +352,13 @@ class MetadataAPITests(APITestCase):
 
     def test_catalog_is_shared_and_only_manager_writes(self):
         rogue = PhysicalDeviceType.objects.create(department_id=3, name="Non-platform type")
-        self.assertEqual(self.client.get(f"{API}physical-device-types/").json()["count"], 1)
+        self.assertEqual(self.client.get(f"{API}physical-device-types/").status_code, 403)
         self.assertEqual(self.post("physical-device-types", {"name": "Pump"}).status_code, 403)
         response = self.post("physical-devices", {"department": 2, "name": "Invalid", "device_type": rogue.pk})
         self.assertEqual(response.status_code, 400)
         self.assertIn("device_type", response.data)
+        rogue.delete()
+        self.assertEqual(self.client.get(f"{API}physical-device-types/").json()["count"], 1)
 
         self.client.force_authenticate(self.manager)
         response = self.post("physical-device-types", {"name": "Pump", "department": 3})

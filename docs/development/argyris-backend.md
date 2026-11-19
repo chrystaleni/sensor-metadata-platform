@@ -1,6 +1,6 @@
 # Backend contribution by Argyris Fellas
 
-Recorded on 13 November and reviewed on 17 November 2026. PR #27's BE-01 through BE-08 metadata implementation is merged into main at `2f97a90c`. PRs #31 and #32 remain separate follow-ups at this review point.
+Recorded on 13 November and reviewed on 17 November 2026. PR #27's BE-01 through BE-08 metadata implementation is merged into main at `2f97a90c`. PRs #31 and #32 are included in the main revision integrated here (`65d35dee3d4d9370b52a1c47122b419bf57b8955`). Organisation functionality described below belongs to this integration branch and is not asserted to be published on main.
 
 The metadata features are implemented. The shared Department schema and access adapter, the final API contract under ARCH-01 (#9), and workbook-column approval remain team integration decisions before shared deployment.
 
@@ -31,11 +31,23 @@ METADATA_DEPARTMENT_MODEL selects the Department model. The current default loca
 
 METADATA_ACCESS_POLICY selects the team's authorization adapter. It supplies readable_department_ids(request), writable_department_ids(request), and can_manage_controlled_lists(request). The default NoAccessPolicy denies metadata access. The APIs use DRF SessionAuthentication and Django's existing user model. The test-only FixturePolicy supplies synthetic department access for automated tests.
 
-`METADATA_PLATFORM_DEPARTMENT_ID` selects the approved existing Platform Department. Published main still defaults it to 1; PR #31 requires explicit configuration and treats missing, invalid, non-positive or out-of-range values as unconfigured. With that change present, add the agreed integer ID to the repository-root `.env`. This setting neither creates a Department nor reassigns existing catalogs.
+`METADATA_PLATFORM_DEPARTMENT_ID` must explicitly select the approved Platform Department. Missing, malformed, non-positive or out-of-range values are unconfigured; there is no default Department ID. The setting itself neither creates a Department nor reassigns existing catalogs.
 
-The optional `demo_departments` and `demo_catalog` fixtures use IDs 1 and 2 only in an empty isolated demo database. Their Platform ID 1 is not evidence of the shared deployment's correct ID. An unconfigured Platform produces empty catalog reads and prevents catalog writes/selections rather than silently using a customer's Department. The real authorization adapter is still required.
+The following provisioning instructions apply to this Organisation integration branch, not to Organisation functionality already published on main. On existing installations, complete the approved Organisation backfill before provisioning. Preserve existing Department primary keys, metadata relationships and catalog ownership; do not replace Departments or move records to make configuration match.
 
-See the [API guide](argyris-api-examples.md) for current/pending authentication behavior and the [PR #32 database runbook](https://github.com/chrystaleni/sensor-metadata-platform/blob/28e223fcb449c2f556f30d6351e9dd1070593084/docs/development/argyris-database.md) for source-revision and shared-model prerequisites.
+After the Organisation migrations and approved backfill, run from `backend/`:
+
+```sh
+python manage.py provision_platform_department
+```
+
+Copy the printed `METADATA_PLATFORM_DEPARTMENT_ID=<id>` line into the deployment environment or repository-root `.env`, then restart the backend. Use the ID returned for that database. On repeat runs, the command returns the existing Department in Organisation `platform`, including an existing owner with a different display name. It rejects an Organisation identity mismatch, multiple Departments in that Organisation, a configured ID that disagrees, or rows in any shared controlled list owned by another Department. Resolve conflicts with the data owner before retrying. The command preserves existing Department IDs, catalog records and metadata links.
+
+Catalog operations and writes that need catalog references require a valid configured owner. For otherwise-authorized catalog readers, an unconfigured or invalid Platform owner returns HTTP 403 for list and detail requests and prevents catalog writes/selections. Default-deny users retain empty lists and hidden details. Existing scoped operational reads can still work while configuration is corrected. Session authentication alone grants no access: the default NoAccessPolicy remains in effect until the real authorization adapter is explicitly integrated.
+
+The optional `demo_departments` and `demo_catalog` fixtures use fixed IDs 1 and 2 only in an empty isolated demo database. Their Platform ID 1 is not evidence of the correct owner in another database. Do not load them into an existing installation. This Organisation branch provides Organisation-aware demo Departments; for an empty isolated demo database, load demo_departments and demo_catalog before provisioning. Run the command to verify the fixture owner and obtain that database's configuration value.
+
+See the [API guide](argyris-api-examples.md) for current/pending authentication behavior and the [database migration runbook](argyris-database.md) for source-revision and shared-model prerequisites.
 
 Authentication, real role rules, membership and API keys remain integration dependencies on SEC-01 through SEC-04. The code's callbacks are an implementation proposal for that integration.
 

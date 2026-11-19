@@ -5,6 +5,8 @@ install Department-scoped uniqueness. This test deliberately keeps exercising
 the original migration graph and its atomic failure.
 """
 
+import json
+
 import pytest
 from django.conf import settings
 from django.db import IntegrityError, connection
@@ -17,6 +19,39 @@ BASELINE = ("metadata", "0003_externalidentifier_created_by_and_more")
 GLOBAL_UNIQUENESS = ("metadata", "0004_identifier_system_uniqueness")
 TARGET = ("metadata", "0005_identifier_department_scope")
 INDEX_NAME = "meta_active_external_identifier"
+ORGANISATION_UPGRADES = [
+    ("local_departments", "0003_backfill_department_organisations"),
+    ("local_departments", "0004_require_department_organisation"),
+]
+
+
+@pytest.fixture
+def approved_identifier_backfill(monkeypatch):
+    """Approve only the Departments explicitly created by this test fixture."""
+    manifest = {
+        "organisations": {"platform": "Platform", "identifier-test": "Identifier test"},
+        "departments": {},
+    }
+    # The context survives dependent fixture teardown and restores the previous
+    # value even when migration restoration raises. Never map arbitrary DB rows.
+    with monkeypatch.context() as environment:
+        def register(department, *, platform=False):
+            manifest["departments"][str(department.pk)] = "platform" if platform else "identifier-test"
+            if platform:
+                assert "platform_department_id" not in manifest
+                manifest["platform_department_id"] = department.pk
+            environment.setenv("DEPARTMENT_ORGANISATION_BACKFILL", json.dumps(manifest))
+
+        environment.setenv("DEPARTMENT_ORGANISATION_BACKFILL", json.dumps(manifest))
+        yield register
+
+
+def unrelated_migration_history(recorder):
+    # These two Organisation migrations legitimately reverse below metadata
+    # 0004 and run again on restoration. All other history stays byte-for-byte.
+    return list(recorder.migration_qs.exclude(app="metadata").exclude(
+        app="local_departments", name__in=[name for _, name in ORGANISATION_UPGRADES],
+    ).order_by("pk").values())
 
 
 class OriginalMigrationLoader(MigrationLoader):
@@ -93,7 +128,7 @@ def identifier_index():
 
 @pytest.mark.postgis
 @pytest.mark.django_db(transaction=True)
-def test_original_0004_rejects_cross_department_pairs_atomically():
+def test_original_0004_rejects_cross_department_pairs_atomically(approved_identifier_backfill):
     assert connection.vendor == "postgresql"
     executor = original_executor()
     fixture_ids = []
@@ -107,7 +142,9 @@ def test_original_0004_rejects_cross_department_pairs_atomically():
         identifiers = historical_apps.get_model("metadata", "ExternalIdentifier")
 
         north = Department.objects.create(name="Upgrade North")
+        approved_identifier_backfill(north, platform=True)
         south = Department.objects.create(name="Upgrade South")
+        approved_identifier_backfill(south)
         element_type = NetworkElementType.objects.create(department=north, name="Upgrade site")
         for department in (north, south):
             parent = NetworkElement.objects.create(
@@ -158,21 +195,17 @@ REPLACEMENT = ("metadata", "0004_squashed_0005_identifier_department_scope")
 
 
 @pytest.fixture
-def historical_identifiers():
+def historical_identifiers(approved_identifier_backfill):
     executor = original_executor()
     recorder = MigrationRecorder(connection)
     original_history = set(recorder.applied_migrations())
-    unrelated_history = list(
-        recorder.migration_qs.exclude(app="metadata").order_by("pk").values()
-    )
+    unrelated_history = unrelated_migration_history(recorder)
     ids = []
     try:
         executor.migrate([BASELINE])
         recorder.record_unapplied(*REPLACEMENT)
         assert REPLACEMENT not in recorder.applied_migrations()
-        assert list(
-            recorder.migration_qs.exclude(app="metadata").order_by("pk").values()
-        ) == unrelated_history
+        assert unrelated_migration_history(recorder) == unrelated_history
         apps = original_executor().loader.project_state([BASELINE]).apps
         Department = apps.get_model(*settings.METADATA_DEPARTMENT_MODEL.split("."))
         Element = apps.get_model("metadata", "NetworkElement")
@@ -183,7 +216,9 @@ def historical_identifiers():
         updater = User.objects.create(username="upgrade-updater")
         deleter = User.objects.create(username="upgrade-deleter")
         north = Department.objects.create(name="Replacement North")
+        approved_identifier_backfill(north, platform=True)
         south = Department.objects.create(name="Replacement South")
+        approved_identifier_backfill(south)
         kind = Kind.objects.create(department=north, name="Site")
         parents = [
             Element.objects.create(department=owner, element_type=kind, name=owner.name)
@@ -217,9 +252,7 @@ def historical_identifiers():
                 if key not in original_history:
                     recorder.record_unapplied(*key)
             assert set(recorder.applied_migrations()) == original_history
-            assert list(
-                recorder.migration_qs.exclude(app="metadata").order_by("pk").values()
-            ) == unrelated_history
+            assert unrelated_migration_history(recorder) == unrelated_history
 
 
 @pytest.mark.postgis
@@ -310,7 +343,12 @@ def test_existing_original_migration_history_is_supported(historical_identifiers
     assert REPLACEMENT not in applied
     executor = MigrationExecutor(connection)
     plan = executor.migration_plan(executor.loader.graph.leaf_nodes())
-    assert [m.name for m, backwards in plan] == ([TARGET[1]] if starting_point == GLOBAL_UNIQUENESS else [])
+    assert all(not backwards for _, backwards in plan)
+    metadata_plan = [(m.app_label, m.name) for m, _ in plan if m.app_label == "metadata"]
+    organisation_plan = [(m.app_label, m.name) for m, _ in plan if m.app_label == "local_departments"]
+    assert metadata_plan == ([TARGET] if starting_point == GLOBAL_UNIQUENESS else [])
+    assert organisation_plan == ORGANISATION_UPGRADES
+    assert len(plan) == len(metadata_plan) + len(organisation_plan)
     executor.migrate(executor.loader.graph.leaf_nodes())
     assert REPLACEMENT in MigrationRecorder(connection).applied_migrations()
     apps = original_executor().loader.project_state([TARGET]).apps

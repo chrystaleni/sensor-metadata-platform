@@ -254,12 +254,12 @@ A frontend error mapper must handle both envelopes, including nested indexed ide
 | Operational list/retrieve | Authenticated request and readable Department |
 | Operational POST/import | Authenticated request and writable selected Department |
 | Operational PUT/PATCH/DELETE | Record visible to readable or writable scope, then writable Department required |
-| Catalog read | Authenticated request with any readable Department, or `can_manage_controlled_lists=True`; rows restricted to Platform |
+| Catalog read | Authenticated request with any readable Department, or `can_manage_controlled_lists=True`, plus a valid Platform owner; rows restricted to Platform. Otherwise-authorized readers receive 403 for list and detail requests when the owner is unconfigured or invalid. |
 | Catalog write | Authenticated request, configured Platform and `can_manage_controlled_lists=True` |
 
 Authenticated default-deny users receive empty lists, 404 details and forbidden writes. Readable-but-not-writable operational details return 403 for writes; records outside both scopes stay hidden with 404. Django `is_superuser` alone does not bypass the adapter.
 
-Published main defaults `METADATA_PLATFORM_DEPARTMENT_ID` to 1. PR #31 replaces that fallback with explicit configuration: missing, invalid, non-positive or out-of-range input becomes unconfigured, so shared-list access is not silently assigned to a customer's Department. A valid setting must identify the approved existing Platform Department; configuration does not create or move catalog rows.
+Main requires explicit `METADATA_PLATFORM_DEPARTMENT_ID` configuration: missing, malformed, non-positive or out-of-range values are treated as unconfigured. There is no default Department ID 1. In this Organisation integration branch, the configured Department must be the single Department in Organisation code `platform` with name `Platform`, and ownership across all four shared catalogs, including archived entries, must match that Department. Configuration does not create Departments or move catalog rows. Provisioning is performed separately with `python manage.py provision_platform_department`, after completing the approved Organisation backfill on existing installations. Organisation provisioning described here belongs to this integration branch, not published main.
 
 Relevant environment settings are:
 

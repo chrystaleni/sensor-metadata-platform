@@ -72,7 +72,6 @@ def scenario(db, settings):
               "other_physical_device": other_device.pk, "other_network_element": other_element.pk}
     for name in CATALOGS.values():
         model = RELATED[name]
-        tokens[f"other_{name}"] = model.objects.create(department_id=3, name="Non-Platform value").pk
         tokens[f"duplicate_{name}"] = model.objects.get(pk=catalog[name]).name.upper()
     return {"client": APIClient(), "users": users, "tokens": tokens, "catalog": catalog,
             "records": {"physical-devices": device, "network-elements": element, "measurements": measurement}}
@@ -128,6 +127,13 @@ def test_api_error_contract(scenario, settings, case, record_property):
         settings.METADATA_ACCESS_POLICY = "metadata.tests.test_error_contract.MissingDepartmentPolicy"
     elif case.setup == "no-platform":
         settings.METADATA_PLATFORM_DEPARTMENT_ID = None
+    for value in case.changes.values():
+        for name in CATALOGS.values():
+            if value == f"$other_{name}":
+                tokens = scenario["tokens"]
+                tokens[f"other_{name}"] = RELATED[name].objects.create(
+                    department_id=3, name="Non-Platform value",
+                ).pk
     detail = case.method in {"PATCH", "DELETE", "PUT"}
     if case.setup in {"collection", "detail"}:
         detail = case.setup == "detail"

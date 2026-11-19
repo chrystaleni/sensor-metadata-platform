@@ -1,4 +1,3 @@
-from django.conf import settings
 from django.db import transaction
 from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.utils import timezone
@@ -10,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
 from .access import get_access_policy
 from .filters import MetadataFilter, MetadataPagination, NetworkElementSearchFilter, StableOrderingFilter
 from .models import ExternalIdentifier
+from .platform import configured_platform_department_id
 from .serializers import (
     DepartmentSelectionSerializer,
     MeasurementSerializer,
@@ -36,9 +36,9 @@ class DepartmentScope:
     def access_policy(self):
         return get_access_policy()
 
-    @property
+    @cached_property
     def platform_department_id(self):
-        return getattr(settings, "METADATA_PLATFORM_DEPARTMENT_ID", None)
+        return configured_platform_department_id()
 
     def require_writable_department(self, department_id):
         if department_id not in self.access_policy.writable_department_ids(self.request):
@@ -150,7 +150,7 @@ class ControlledListViewSet(MetadataViewSet):
         return queryset
 
     def department_for_create(self):
-        if not self.platform_department_id or not self.access_policy.can_manage_controlled_lists(self.request):
+        if not self.access_policy.can_manage_controlled_lists(self.request) or self.platform_department_id is None:
             raise PermissionDenied("You do not have write access to the shared lists.")
         return self.platform_department_id
 
@@ -162,6 +162,8 @@ class ControlledListViewSet(MetadataViewSet):
             or self.access_policy.readable_department_ids(self.request)
         ):
             return self.active_records().none()
+        if self.platform_department_id is None:
+            raise PermissionDenied("The shared controlled lists are unavailable.")
         return self.active_records().filter(department_id=self.platform_department_id)
 
 
