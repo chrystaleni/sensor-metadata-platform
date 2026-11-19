@@ -8,9 +8,15 @@ async function login(page,username='e2e-admin'){
  await expect(page.getByLabel('Department',{exact:true})).toContainText('E2E North');
 }
 async function choose(dialog,label,text){
- const select=dialog.getByLabel(label,{exact:true});
- const option=select.locator('option').filter({hasText:text}).first();
- await select.selectOption(await option.getAttribute('value'));
+ const select=dialog.getByRole('combobox',{name:label,exact:true});
+ await expect(select).toBeVisible();
+ await expect.poll(async()=>{
+  return select.evaluate((element,expected)=>
+   Array.from(element.options).some(option=>option.textContent.includes(expected)),text);
+ }).toBe(true);
+ const value=await select.evaluate((element,expected)=>
+  Array.from(element.options).find(option=>option.textContent.includes(expected))?.value,text);
+ await select.selectOption(value);
 }
 async function create(page,section,name,fields){
  await page.getByRole('link',{name:section,exact:true}).click();
@@ -50,7 +56,7 @@ test('real session, relational CRUD, persistence, GIS, export and scoped API key
  const elementRow=page.getByRole('row').filter({has:page.getByRole('cell',{name:'E2E Element',exact:true})});
  await elementRow.getByRole('button',{name:'Edit',exact:true}).click();
  await page.getByRole('dialog').getByLabel('Description',{exact:true}).fill('Updated network element');
- await page.getByRole('dialog').getByLabel('Geometry (GeoJSON)',{exact:true}).fill('{"type":"Polygon","coordinates":[[[33,35],[34,35],[34,36],[33,35]]]}');
+ await page.getByRole('dialog').getByRole('textbox',{name:'Geometry (GeoJSON)',exact:true}).fill('{"type":"Polygon","coordinates":[[[33,35],[34,35],[34,36],[33,35]]]}');
  await page.getByRole('button',{name:'Save to Django'}).click();await expect(page.getByRole('cell',{name:'Updated network element',exact:true})).toBeVisible();
  await create(page,'Measurements','E2E Measurement',async dialog=>{
   await choose(dialog,'Physical Device *','E2E Device');await choose(dialog,'Network Element *','E2E Element');
@@ -78,7 +84,7 @@ test('real session, relational CRUD, persistence, GIS, export and scoped API key
  await page.getByRole('link',{name:'Excel Import/Export',exact:true}).click();
  const download=page.waitForEvent('download');await page.getByRole('button',{name:'Download XLSX'}).click();
  const exported=await download;expect(exported.suggestedFilename()).toBe('measurements.xlsx');
- execFileSync(process.env.E2E_PYTHON,['-c',"import sys; from openpyxl import load_workbook; w=load_workbook(sys.argv[1],read_only=True); assert any('E2E Updated Measurement' in row for row in w.active.iter_rows(values_only=True)); w.close()",await exported.path()],{stdio:'pipe'});
+ execFileSync(process.env.E2E_PYTHON,['-c',"import sys; from openpyxl import load_workbook; w=load_workbook(open(sys.argv[1],'rb'),read_only=True); assert any('E2E Updated Measurement' in row for row in w.active.iter_rows(values_only=True)); w.close()",await exported.path()],{stdio:'pipe'});
  await page.getByLabel('Export format').selectOption('csv');const csvDownload=page.waitForEvent('download');
  await page.getByRole('button',{name:'Download CSV'}).click();expect((await csvDownload).suggestedFilename()).toBe('measurements.csv');
  await page.getByRole('link',{name:'API Keys',exact:true}).click();await page.getByLabel('Key name').fill('E2E SCADA');
