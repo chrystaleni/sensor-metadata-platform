@@ -19,7 +19,18 @@ DEBUG = os.environ.get("DJANGO_DEBUG", "True").strip().lower() in {
     "yes",
     "on",
 }
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
+if not DEBUG and SECRET_KEY == "django-insecure-local-development-only-change-me":
+    raise ImproperlyConfigured("Set DJANGO_SECRET_KEY when DJANGO_DEBUG=False.")
+ALLOWED_HOSTS = [value.strip() for value in os.environ.get(
+    "DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,testserver"
+).split(",") if value.strip()]
+CSRF_TRUSTED_ORIGINS = [value.strip() for value in os.environ.get(
+    "DJANGO_CSRF_TRUSTED_ORIGINS", ""
+).split(",") if value.strip()]
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_SECURE = os.environ.get("DJANGO_SECURE_COOKIES", "false").lower() == "true"
+CSRF_COOKIE_SECURE = SESSION_COOKIE_SECURE
 
 DATABASE_ENGINE = os.environ.get("DJANGO_DATABASE_ENGINE", "postgis").strip().lower()
 USE_POSTGIS = DATABASE_ENGINE in {"postgis", "postgres", "postgresql"}
