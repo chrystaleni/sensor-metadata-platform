@@ -36,3 +36,14 @@ The first rejected credential check starts a fixed window for the client address
 The limiter tries to acquire a per-client PostgreSQL transaction lock without waiting. A busy lock or unavailable throttling infrastructure returns `503` with `{"detail":"Login is temporarily unavailable."}` and `Retry-After: 1`. A busy request skips credential verification and leaves the failure budget intact. A database failure rolls back any pending counter changes and prevents a new login session. A `429` means the failure budget is exhausted and gives the remaining window. A `503` is a temporary service failure. Respect the retry delay and keep an existing session intact. The lock is released when the transaction ends, though the request holding it still uses a worker and a database connection during password verification.
 
 The client key uses the server-provided `REMOTE_ADDR`. The application ignores forwarded IP headers. Behind a reverse proxy, configure the serving infrastructure to derive `REMOTE_ADDR` only from trusted proxy hops and prevent direct access that would bypass that boundary. Otherwise users sharing a proxy or NAT address also share one budget. A missing or invalid peer address, or a non-PostgreSQL backend, makes login return `503`. Address-based limits cover username switching from one client. Distributed attacks across many addresses require additional controls at the edge.
+
+
+## Frontend capability context
+
+`GET /api/v1/auth/context/` is additive; it does not change `/session/` responses.
+It returns `authenticated`, `role`, authorized `departments` (ID, name,
+Organisation code and `writable`), and `permissions` (`write_metadata`,
+`manage_catalogs`, `manage_api_keys`). The configured access policy is authoritative;
+NoAccessPolicy produces no Departments and no permissions even for an assigned
+System Administrator. All responses prohibit caching. See the
+[integration guide](phase3-integration.md) for the role matrix and API keys.
