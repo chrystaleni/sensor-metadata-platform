@@ -20,7 +20,7 @@ async function choose(dialog,label,text){
 }
 async function create(page,section,name,fields){
  await page.getByRole('link',{name:section,exact:true}).click();
- await page.getByRole('button',{name:'+ Add',exact:true}).click();
+ await page.getByRole('button',{name:/^\+ Add(?: .+)?$/}).click();
  const dialog=page.getByRole('dialog');await dialog.getByLabel('Name *',{exact:true}).fill(name);
  await fields(dialog);
  const response=page.waitForResponse(r=>r.request().method()==='POST'&&r.url().includes('/api/v1/'));
