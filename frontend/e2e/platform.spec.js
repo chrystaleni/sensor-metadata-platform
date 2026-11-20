@@ -103,7 +103,12 @@ test('real session, relational CRUD, persistence, GIS, export and scoped API key
  await page.getByRole('button',{name:'Save to Django'}).click();
  await expect(page.getByRole('cell',{name:'E2E Updated Measurement',exact:true})).toBeVisible();
 
- const measurementId=await page.getByRole('row').filter({has:page.getByRole('cell',{name:'E2E Updated Measurement',exact:true})}).getByRole('cell').first().textContent();
+ const measurementIdCell = page.getByRole('row').filter({
+  has: page.getByRole('cell', { name: 'E2E Updated Measurement', exact: true }),
+}).getByRole('cell').first();
+
+const measurementId = (await measurementIdCell.innerText()).trim().replace(/^#/, '');
+expect(measurementId).toMatch(/^\d+$/);
 
  await page.getByRole('link',{name:'GIS Map',exact:true}).click();
  await expect(page.getByLabel('Interactive geographic map')).toHaveClass(/leaflet-container/);
