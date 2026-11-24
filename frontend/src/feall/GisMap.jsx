@@ -1,3 +1,4 @@
+import {loadGreekMapStyle,addGreekBasemap} from './greekBasemap';
 import {useEffect,useMemo,useRef,useState} from 'react';
 import './gis.css';
 
@@ -15,12 +16,11 @@ export default function GisMap({records}){
   });
   useEffect(()=>{
     let active=true;
-    loadLeaflet().then(L=>{
+    Promise.all([loadLeaflet(),loadGreekMapStyle()]).then(([L,style])=>{
       if(!active||!mapElement.current)return;
-      const map=L.map(mapElement.current,{scrollWheelZoom:false}).setView([35.14,33.39],10);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-        attribution:'© OpenStreetMap contributors',maxZoom:19
-      }).addTo(map);
+      const map=L.map(mapElement.current,{scrollWheelZoom:false,minZoom:1,maxZoom:19}).setView([35.14,33.39],10);
+      addGreekBasemap(map,style);
+      map.attributionControl.addAttribution('© OpenStreetMap contributors | OpenFreeMap');
       mapRef.current=map;layerRef.current=L.featureGroup().addTo(map);setReady(true);
       requestAnimationFrame(()=>map.invalidateSize());
     }).catch(e=>active&&setError(e.message));
