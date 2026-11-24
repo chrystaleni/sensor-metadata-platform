@@ -1,11 +1,15 @@
 import {render,screen,fireEvent,waitFor} from '@testing-library/react';
 import {describe,it,expect,vi} from 'vitest';
 const mocks=vi.hoisted(()=>({fit:vi.fn()}));
+vi.mock('./greekBasemap',()=>({
+ loadGreekMapStyle:async()=>({version:8,sources:{},layers:[]}),
+ addGreekBasemap:vi.fn()
+}));
 vi.mock('./mapUtils',async importOriginal=>{
  const actual=await importOriginal();
  const bounds=name=>({name,isValid:()=>true,pad(){return this}});
  const group={layers:[],clearLayers(){this.layers=[]},getLayers(){return this.layers},getBounds:()=>bounds('all'),addTo(){return this}};
- const L={map:()=>({setView(){return this},fitBounds:mocks.fit,invalidateSize(){},remove(){}}),tileLayer:()=>({addTo(){}}),featureGroup:()=>group,
+ const L={map:()=>({setView(){return this},fitBounds:mocks.fit,attributionControl:{addAttribution:vi.fn()},invalidateSize(){},remove(){}}),tileLayer:()=>({addTo(){}}),featureGroup:()=>group,
   geoJSON:f=>({on(){return this},bindTooltip(){return this},addTo(g){g.layers.push(this);return this},getBounds:()=>bounds(f.properties.name)})};
  return {...actual,loadLeaflet:async()=>{window.L=L;return L}};
 });
