@@ -216,7 +216,7 @@ GeoJSON fields accept geometry objects, not Feature/FeatureCollection, WKT, root
 
 Each supplied external identifier requires both non-blank strings: `source` up to 120 and `value` up to 255 characters. The list has a maximum of 100 items. Its `id` is read-only and its Department is derived from the Network Element.
 
-`data_collection_config` accepts an object or null. Known optional properties are:
+`data_collection_config` accepts an object or null (null removes the stored `DataCollectionConfiguration`). Known optional properties are:
 
 | Property | Validation |
 | --- | --- |
