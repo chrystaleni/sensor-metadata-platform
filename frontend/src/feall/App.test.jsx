@@ -14,7 +14,7 @@ it('ignores an older search response even when the transport fails to honor abor
   else data={count:0,results:[]};
   return {ok:true,status:200,json:async()=>data};
  }));
- render(<App/>);await screen.findByLabelText('Department');
+ render(<App/>);await screen.findByRole('button',{name:'Profile menu'});
  fireEvent.click(screen.getByRole('link',{name:'Measurements',exact:true}));
  const search=await screen.findByLabelText('Search records');
  fireEvent.change(search,{target:{value:'old'}});await waitFor(()=>expect(resolveOld).toBeTypeOf('function'));

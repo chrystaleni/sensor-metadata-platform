@@ -14,7 +14,7 @@ from .models import UserRole
 def access_context(request):
     user = request.user
     result = {"authenticated": user.is_authenticated, "role": None, "departments": [],
-              "permissions": {"write_metadata": False, "manage_catalogs": False, "manage_api_keys": False}}
+              "permissions": {"write_metadata": False, "manage_catalogs": False, "manage_api_keys": False, "manage_users": False}}
     if user.is_authenticated and user.is_active:
         role = UserRole.objects.filter(user_id=user.pk).values_list("role", flat=True).first()
         policy = get_access_policy()
@@ -31,5 +31,6 @@ def access_context(request):
             "write_metadata": bool(writable),
             "manage_catalogs": policy.can_manage_controlled_lists(principal),
             "manage_api_keys": bool(writable) and role in (UserRole.Role.SYSTEM_ADMIN, UserRole.Role.DEPARTMENT_ADMIN),
+            "manage_users": bool(writable) and role in (UserRole.Role.SYSTEM_ADMIN, UserRole.Role.DEPARTMENT_ADMIN),
         }
     return JsonResponse(result)

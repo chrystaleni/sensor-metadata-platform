@@ -275,6 +275,8 @@ def test_reverse_migration_refuses_global_collision_without_changing_data(partit
         with pytest.raises(IntegrityError):
             original_executor().migrate([BEFORE])
         assert AFTER in MigrationRecorder(connection).applied_migrations()
+        # Later migrations were reversed first; re-apply them so the current models match the schema.
+        restore_migrations()
         assert database_snapshot() == before
     finally:
         restore_migrations()

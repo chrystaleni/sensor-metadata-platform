@@ -3,7 +3,9 @@ from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.utils import timezone
 from django.utils.functional import cached_property
 from rest_framework import filters, serializers, viewsets
-from rest_framework.exceptions import APIException, PermissionDenied
+from rest_framework.decorators import action
+from rest_framework.exceptions import APIException, NotFound, PermissionDenied
+from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
 
 from .access import get_access_policy
@@ -245,3 +247,14 @@ class MeasurementViewSet(OperationalViewSet):
         "measurement_type__name",
         "measurement_unit__name",
     )
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("collection_configuration")
+
+    @action(detail=True, methods=["get"], url_path="configuration")
+    def configuration(self, request, pk=None):
+        """Read-only Data Collection Configuration of an authorized Measurement."""
+        configuration = getattr(self.get_object(), "collection_configuration", None)
+        if configuration is None:
+            raise NotFound("This Measurement has no Data Collection Configuration.")
+        return Response(configuration.config)

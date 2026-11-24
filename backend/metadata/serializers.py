@@ -202,13 +202,37 @@ class OperationalSerializer(RecordSerializer):
         read_only_fields = ("created_by", "updated_by")
 
 
+class JSONObjectField(serializers.JSONField):
+    """A JSON object with no NUL characters, for free-form technical parameters."""
+
+    def to_internal_value(self, data):
+        if not isinstance(data, dict):
+            raise serializers.ValidationError("Expected a JSON object.")
+        try:
+            json.dumps(data, ensure_ascii=False).encode("utf-8")
+        except (ValueError, TypeError, RecursionError):
+            raise serializers.ValidationError("Expected a valid UTF-8 JSON object.") from None
+        nodes = [data]
+        while nodes:
+            node = nodes.pop()
+            if isinstance(node, dict):
+                nodes.extend(node.keys())
+                nodes.extend(node.values())
+            elif isinstance(node, list):
+                nodes.extend(node)
+            elif isinstance(node, str) and "\x00" in node:
+                raise serializers.ValidationError("JSON strings cannot contain null characters.")
+        return data
+
+
 class PhysicalDeviceSerializer(OperationalSerializer):
     location = GeoJSONField(("Point",), required=False, allow_null=True)
+    communication_parameters = JSONObjectField(required=False, allow_null=True)
     platform_relationships = ("device_type",)
 
     class Meta(OperationalSerializer.Meta):
         model = PhysicalDevice
-        fields = (*RECORD_FIELDS, "device_type", "location")
+        fields = (*RECORD_FIELDS, "device_type", "location", "communication_parameters")
 
 
 class ExternalIdentifierSerializer(serializers.ModelSerializer):
@@ -235,12 +259,14 @@ class NetworkElementSerializer(OperationalSerializer):
     external_identifiers = ExternalIdentifierSerializer(
         source="active_external_identifiers", many=True, required=False, max_length=100
     )
+    elevation = serializers.FloatField(required=False, allow_null=True, min_value=-1000, max_value=10000)
     platform_relationships = ("element_type",)
 
     class Meta(OperationalSerializer.Meta):
         model = NetworkElement
         fields = (
             *RECORD_FIELDS, "element_type", "geometry", "external_identifiers", "dma_model_id", "strategic_model_id",
+            "network_area", "elevation", "address",
         )
 
     def validate_external_identifiers(self, identifiers):

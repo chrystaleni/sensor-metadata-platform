@@ -14,6 +14,9 @@ from rest_framework.response import Response
 from rest_framework.utils import json
 from rest_framework.views import APIView
 
+from .client_format import (
+    ClientWorkbook, client_counts, client_errors, is_client_layout, read_client_sheets, resolve_client_records,
+)
 from .serializers import (
     DepartmentSelectionSerializer,
     MeasurementSerializer,
@@ -151,6 +154,13 @@ def read_workbook(upload):
         records = {}
         errors = []
         try:
+            if is_client_layout(workbook.worksheets):
+                records = read_client_sheets(workbook, errors, row_error)
+                if errors:
+                    raise RejectedWorkbook(errors)
+                if not any(records.values()):
+                    raise file_error("The workbook has no metadata rows.")
+                return records
             for worksheet in workbook.worksheets:
                 if worksheet.title not in SHEETS:
                     errors.append(row_error(worksheet.title, None, {"sheet": ["Unknown worksheet."]}))
@@ -233,13 +243,22 @@ class MetadataImportView(DepartmentScope, APIView):
         selection.is_valid(raise_exception=True)
         department_id = selection.validated_data["department"]
         self.require_writable_department(department_id)
+        context = {
+            "department_id": department_id,
+            "platform_department_id": self.platform_department_id,
+            "request": request,
+        }
         try:
             rows = read_workbook(selection.validated_data["file"])
-            counts = import_workbook(rows, {
-                "department_id": department_id,
-                "platform_department_id": self.platform_department_id,
-                "request": request,
-            })
+            if isinstance(rows, ClientWorkbook):
+                try:
+                    with transaction.atomic():
+                        records, created = resolve_client_records(rows, context, row_error, RejectedWorkbook)
+                        counts = client_counts(import_workbook(records, context), created)
+                except RejectedWorkbook as error:
+                    raise RejectedWorkbook(client_errors(error.errors)) from None
+            else:
+                counts = import_workbook(rows, context)
         except RejectedWorkbook as error:
             return Response({"errors": error.errors}, status=status.HTTP_400_BAD_REQUEST)
         return Response({"created": counts}, status=status.HTTP_201_CREATED)

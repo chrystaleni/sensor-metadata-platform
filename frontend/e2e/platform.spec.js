@@ -2,11 +2,27 @@
 import {test,expect} from '@playwright/test';
 import {execFileSync} from 'node:child_process';
 
+// The Department switcher lives in the profile window (avatar, top right).
+async function departmentSelect(page){
+ const select=page.getByLabel('Switch department',{exact:true});
+ if(!(await select.isVisible()))await page.getByRole('button',{name:'Profile menu'}).click();
+ return select;
+}
+async function logout(page){
+ const button=page.getByRole('button',{name:'Log out',exact:true});
+ if(!(await button.isVisible()))await page.getByRole('button',{name:'Profile menu'}).click();
+ await button.click();
+}
+async function closeProfile(page){
+ if(await page.getByRole('dialog',{name:'Your profile'}).isVisible())await page.keyboard.press('Escape');
+}
+
 async function login(page,username='e2e-admin'){
  await page.goto('/');await page.getByLabel('Username',{exact:true}).fill(username);
  await page.getByLabel('Password',{exact:true}).fill(process.env.E2E_PASSWORD);
  await page.getByRole('button',{name:'Sign in',exact:true}).click();
- await expect(page.getByLabel('Department',{exact:true})).toContainText('E2E North');
+ await expect(await departmentSelect(page)).toContainText('E2E North');
+ await closeProfile(page);
 }
 
 async function choose(dialog,label,text){
@@ -59,7 +75,7 @@ test('real session, relational CRUD, persistence, GIS, export and scoped API key
  await page.reload();
  await verifyDescription(page,deviceRow,'Updated via browser');
 
- const department=page.getByLabel('Department',{exact:true});
+ const department=await departmentSelect(page);
  const north=await department.inputValue();
  const east=await department.locator('option').filter({hasText:'E2E East'}).getAttribute('value');
 
@@ -68,6 +84,7 @@ test('real session, relational CRUD, persistence, GIS, export and scoped API key
  await expect(page.getByRole('cell',{name:'E2E Device',exact:true})).not.toBeVisible();
 
  await department.selectOption(north);
+ await closeProfile(page);
  await expect(page.getByRole('cell',{name:'E2E Device',exact:true})).toBeVisible();
 
  await page.getByLabel('Search records').fill('missing-e2e-record');
@@ -127,9 +144,9 @@ expect(measurementId).toMatch(/^\d+$/);
  await expect(page.getByRole('button',{name:/E2E Imported Device.*Physical Device/})).toBeVisible();
 
  await page.getByRole('link',{name:'Dashboard',exact:true}).click();
- for(const stat of await page.locator('.fe-stat strong').all()){
-  await expect(stat).toHaveText('2');
- }
+ const stats=page.locator('.fe-stat strong');
+ for(const index of [0,1,2])await expect(stats.nth(index)).toHaveText('2');
+ await expect(stats.nth(3)).toHaveText(/^\d+\/\d+$/);
 
  await page.getByRole('link',{name:'Excel Import/Export',exact:true}).click();
  const download=page.waitForEvent('download');
@@ -189,14 +206,15 @@ expect(measurementId).toMatch(/^\d+$/);
   await expect(page.getByRole('cell',{name,exact:true})).not.toBeVisible();
  }
 
- await page.getByRole('button',{name:'Log out',exact:true}).click();
+ await logout(page);
  await expect(page.getByLabel('Password',{exact:true})).toBeVisible();
 });
 
 test('viewer controls and cross-Organisation isolation are enforced by Django',async({page})=>{
  await login(page,'e2e-viewer');
 
- await expect(page.getByLabel('Department',{exact:true})).not.toContainText('E2E East');
+ await expect(await departmentSelect(page)).not.toContainText('E2E East');
+ await closeProfile(page);
  await page.getByRole('link',{name:'Physical Devices',exact:true}).click();
  await expect(page.getByRole('button',{name:/^\+ Add(?: .+)?$/})).not.toBeVisible();
 
@@ -213,7 +231,7 @@ test('viewer controls and cross-Organisation isolation are enforced by Django',a
   headers:{'X-CSRFToken':csrf},
   data:{
    name:'Denied',
-   department:Number(await page.getByLabel('Department',{exact:true}).inputValue()),
+   department:Number(await (await departmentSelect(page)).inputValue()),
    device_type:types.results[0].id
   }
  });
@@ -221,7 +239,7 @@ test('viewer controls and cross-Organisation isolation are enforced by Django',a
  expect(denied.status()).toBe(403);
  expect(JSON.stringify(await denied.json())).not.toContain('CSRF');
 
- await page.getByRole('button',{name:'Log out',exact:true}).click();
+ await logout(page);
 });
 
 test('expired server-side sessions return to login after refresh',async({page})=>{
