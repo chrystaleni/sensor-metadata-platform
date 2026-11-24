@@ -8,6 +8,11 @@ async function departmentSelect(page){
  if(!(await select.isVisible()))await page.getByRole('button',{name:'Profile menu'}).click();
  return select;
 }
+async function logout(page){
+ const button=page.getByRole('button',{name:'Log out',exact:true});
+ if(!(await button.isVisible()))await page.getByRole('button',{name:'Profile menu'}).click();
+ await button.click();
+}
 async function closeProfile(page){
  if(await page.getByRole('dialog',{name:'Your profile'}).isVisible())await page.keyboard.press('Escape');
 }
@@ -139,9 +144,9 @@ expect(measurementId).toMatch(/^\d+$/);
  await expect(page.getByRole('button',{name:/E2E Imported Device.*Physical Device/})).toBeVisible();
 
  await page.getByRole('link',{name:'Dashboard',exact:true}).click();
- for(const stat of await page.locator('.fe-stat strong').all()){
-  await expect(stat).toHaveText('2');
- }
+ const stats=page.locator('.fe-stat strong');
+ for(const index of [0,1,2])await expect(stats.nth(index)).toHaveText('2');
+ await expect(stats.nth(3)).toHaveText(/^\d+\/\d+$/);
 
  await page.getByRole('link',{name:'Excel Import/Export',exact:true}).click();
  const download=page.waitForEvent('download');
@@ -201,8 +206,7 @@ expect(measurementId).toMatch(/^\d+$/);
   await expect(page.getByRole('cell',{name,exact:true})).not.toBeVisible();
  }
 
- await page.getByRole('button',{name:'Profile menu'}).click();
- await page.getByRole('button',{name:'Log out',exact:true}).click();
+ await logout(page);
  await expect(page.getByLabel('Password',{exact:true})).toBeVisible();
 });
 
@@ -235,8 +239,7 @@ test('viewer controls and cross-Organisation isolation are enforced by Django',a
  expect(denied.status()).toBe(403);
  expect(JSON.stringify(await denied.json())).not.toContain('CSRF');
 
- await page.getByRole('button',{name:'Profile menu'}).click();
- await page.getByRole('button',{name:'Log out',exact:true}).click();
+ await logout(page);
 });
 
 test('expired server-side sessions return to login after refresh',async({page})=>{
