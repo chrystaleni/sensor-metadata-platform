@@ -16,7 +16,7 @@ export function SessionGate({component:Component}){
   if(!mounted.current)return;
   if(!result.authenticated){setSession(false);return;}
   const context=await api('/auth/context/');
-  if(mounted.current)setSession(context.authenticated?context:false);
+  if(mounted.current)setSession(context.authenticated?{...context,user:result.user}:false);
  },[]);
  useEffect(()=>{
   mounted.current=true;
