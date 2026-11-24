@@ -1,0 +1,64 @@
+\section{Phase 3: Implementation and Integration}
+
+\subsection{Overview}
+Phase 3 delivers a working implementation of the Sensor Metadata Management Platform designed in Phase 2. The backend uses Django and the Django REST Framework (DRF) on PostgreSQL with the PostGIS extension, as requested by KIOS CoE. The frontend is a React single-page application. The system runs locally as three Docker Compose services (database, backend, frontend), with nginx serving the frontend and proxying \texttt{/api/}, \texttt{/health/} and \texttt{/ready/} to the backend.
+
+\subsection{System Architecture}
+\begin{itemize}
+  \item \textbf{Database:} PostgreSQL with PostGIS (SRID 4326). Geometries are stored as GeoJSON Point, LineString or Polygon in WGS84 \texttt{[longitude, latitude]}.
+  \item \textbf{Backend:} Django 5.2 and DRF. The REST API is versioned under \texttt{/api/v1/}.
+  \item \textbf{Frontend:} React 19 with Vite and Leaflet for the map view.
+  \item \textbf{Documentation:} An OpenAPI 3 schema is available at \texttt{/api/v1/openapi.json} and an interactive Swagger UI at \texttt{/api/v1/docs/}. Both require authentication.
+\end{itemize}
+
+\subsection{Data Model}
+The main entities are Organisation, Department, Physical Device, Network Element, Measurement and External Identifier. Each operational record belongs to exactly one Department. The controlled lists (physical device types, network element types, measurement types and measurement units) are owned by a dedicated Platform Department and are shared by all Departments.
+
+Each Measurement has at most one \texttt{DataCollectionConfiguration}, stored as a separate entity. It is available through \texttt{GET /api/v1/measurements/\{id\}/configuration/} and also appears in the Measurement response. A Network Element additionally stores its network area, elevation and address, and a Physical Device stores its communication parameters. Records are deleted logically, so soft-deleted records stay hidden but are preserved.
+
+\subsection{Users, Roles and Access Control}
+Access is based on explicit roles and Department membership. Being a Django staff or superuser account does not grant any platform permission.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|l|l|l|l|}
+\hline
+\textbf{Role} & \textbf{Read} & \textbf{Write / import} & \textbf{Shared lists} & \textbf{API keys / users} \\ \hline
+Viewer & Own Departments & No & Read & No \\ \hline
+Editor & Own Departments & Own Departments & Read & No \\ \hline
+Department Administrator & Own Departments & Own Departments & Read & Own Departments \\ \hline
+System Administrator & All & All & Manage & All \\ \hline
+\end{tabular}
+\caption{Roles and permissions.}
+\end{table}
+
+Records outside a user's scope are hidden (HTTP 404), while insufficient privileges within the scope return HTTP 403. Users are managed through \texttt{/api/v1/users/}: a System Administrator manages all users, whereas a Department Administrator manages only Viewer and Editor accounts within their own Departments. Deleting a user only deactivates the account. Departments and Organisations are available through \texttt{/api/v1/departments/} and \texttt{/api/v1/organisations/}.
+
+\subsection{Authentication}
+Web users sign in with a session cookie protected by CSRF tokens, with login throttling after repeated failures. External systems use read-only API keys sent in the \texttt{X-API-Key} header. Keys have random 256-bit secrets, expire (90 days by default) and can be revoked. Only a SHA-256 digest is stored, and the raw key is shown once at creation. API keys cannot write data or manage other keys.
+
+\subsection{REST API}
+The API provides list, create, update and delete operations for physical devices (also under the alias \texttt{/devices/}), network elements, measurements and the four controlled lists, with pagination, search and filtering. Spreadsheet import is available at \texttt{/api/v1/imports/excel/}.
+
+\subsection{Excel Import}
+The import accepts two layouts. The first is the platform's own three-sheet template. The second is the client's workbook layout with the sheets \texttt{Measurements}, \texttt{NetworkElements} and \texttt{Physical\_devices}. For the client layout the system:
+\begin{itemize}
+  \item links measurements to devices and network elements through the client's identifiers;
+  \item resolves types and units by name, and creates missing entries in the shared lists only when the importing user is a System Administrator;
+  \item ignores informational sheets (\texttt{Statistics}, \texttt{LOVs}, \texttt{Structure}) and formula columns;
+  \item runs the whole import as one atomic transaction, and reports errors with the sheet, row and the client's own column names.
+\end{itemize}
+Every record still passes through the normal serializers, so all validation, Department ownership and uniqueness rules apply. The client's sample workbook (11 devices, 10 network elements, 22 measurements) was imported successfully in about half a second.
+
+\subsection{User Interface}
+The interface includes a dashboard with summary statistics, a map of devices and network elements, resource tables with forms, import and export (CSV and XLSX), an API key management page, a user administration page, and a role-dependent Settings page. A profile menu provides the Department switcher, the account details and logout.
+
+\subsection{Testing and Validation}
+The backend has an automated suite of about 590 tests, including migration, permission and import tests, and the frontend has 85 unit tests with linting and a production build. Browser (Playwright) workflows exist but were not rerun after the latest changes. The platform runs locally through Docker Compose; it is not yet hardened for internet production deployment.
+
+\subsection{Limitations and Future Work}
+\begin{itemize}
+  \item Fields from the client's design sheet such as sensor stations, communication profiles and credentials are not yet modelled.
+  \item The frontend forms do not yet expose the newly added network element and device fields.
+  \item Export reads data on the client side and is not intended for very large datasets.
+\end{itemize}
