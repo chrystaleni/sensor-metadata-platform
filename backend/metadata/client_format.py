@@ -316,6 +316,14 @@ def resolve_client_records(raw, context, row_error, reject):
     sheets_of = {"device_type": "Physical_devices", "element_type": "NetworkElements",
                  "measurement_type": "Measurements", "measurement_unit": "Measurements"}
     existing = {kind: _lookup(model, platform_id) for kind, model in models.items()}
+    for kind, found in names.items():
+        limit = models[kind]._meta.get_field("name").max_length
+        for name in found.values():
+            if len(name) > limit:
+                errors.append(row_error(sheets_of[kind], None, {labels[kind]: [
+                    f"'{name[:30]}...' is longer than {limit} characters."]}))
+    if errors:
+        raise reject(errors)
     missing = {kind: [n for low, n in found.items() if low not in existing[kind]] for kind, found in names.items()}
     created = 0
     if any(missing.values()):

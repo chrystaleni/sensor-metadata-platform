@@ -258,3 +258,18 @@ def test_client_format_import_rejects_unknown_list_values_for_non_administrators
     assert response.status_code == 400
     assert {e["sheet"] for e in response.json()["errors"]} == {"Physical_devices", "NetworkElements", "Measurements"}
     assert not Measurement.objects.filter(name="Flow A").exists()
+
+
+def test_client_format_import_rejects_overlong_list_names(world):
+    from metadata.tests.test_backend import make_workbook
+    client, _ = login("SYSTEM_ADMIN")
+    upload = make_workbook({
+        "Measurements": [("MeasurementName", "MeasurementType", "MeasurementUnit", "NetworkElementId", "PhysicalDeviceId"),
+                         ("m", "x" * 300, "m3/h", "NE1", "D1")],
+        "NetworkElements": [("NetworkElementId", "NetworkElementName", "NetworkElementType"), ("NE1", "n", "DMA")],
+        "Physical_devices": [("Device_id", "Device_name", "Device_type"), ("D1", "d", "T64")],
+    })
+    response = client.post("/api/v1/imports/excel/", {"department": 2, "file": upload}, format="multipart")
+    assert response.status_code == 400
+    assert "MeasurementType" in response.json()["errors"][0]["errors"]
+    assert not MeasurementType.objects.filter(name__startswith="xxx").exists()
