@@ -353,7 +353,8 @@ def test_existing_original_migration_history_is_supported(historical_identifiers
     assert all(not backwards for _, backwards in plan)
     metadata_plan = [(m.app_label, m.name) for m, _ in plan if m.app_label == "metadata"]
     organisation_plan = [(m.app_label, m.name) for m, _ in plan if m.app_label == "local_departments"]
-    assert metadata_plan == ([TARGET] if starting_point == GLOBAL_UNIQUENESS else [])
+    later = [("metadata", "0006_data_collection_configuration"), ("metadata", "0007_client_format_fields")]  # applied after the identifier upgrade
+    assert metadata_plan == ([TARGET] if starting_point == GLOBAL_UNIQUENESS else []) + later
     assert organisation_plan == ORGANISATION_UPGRADES
     security_plan = [(m.app_label, m.name) for m, _ in plan if m.app_label == "platform_security"]
     assert security_plan == SECURITY_UPGRADES

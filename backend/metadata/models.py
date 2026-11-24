@@ -8,6 +8,9 @@ from django.utils import timezone
 NETWORK_GEOMETRY_TYPES = ("Point", "LineString", "Polygon")
 
 
+_UNSET = object()
+
+
 class MetadataQuerySet(models.QuerySet):
     def active(self):
         return self.filter(deleted_at__isnull=True)
@@ -88,6 +91,8 @@ class NetworkElementType(ControlledListEntry):
 class PhysicalDevice(DepartmentRecord):
     device_type = models.ForeignKey(PhysicalDeviceType, on_delete=models.PROTECT, related_name="devices")
     location = models.PointField(srid=4326, null=True, blank=True)
+    # How external systems reach the device (for example an IP address); free-form JSON object.
+    communication_parameters = models.JSONField(null=True, blank=True)
 
     class Meta(DepartmentRecord.Meta):
         constraints = [
@@ -100,6 +105,9 @@ class NetworkElement(DepartmentRecord):
     geometry = models.GeometryField(srid=4326, null=True, blank=True)
     dma_model_id = models.CharField(max_length=255, blank=True)
     strategic_model_id = models.CharField(max_length=255, blank=True)
+    network_area = models.CharField(max_length=255, blank=True)
+    elevation = models.FloatField(null=True, blank=True)
+    address = models.CharField(max_length=255, blank=True)
 
     class Meta(DepartmentRecord.Meta):
         constraints = [
@@ -154,6 +162,63 @@ class Measurement(DepartmentRecord):
     network_element = models.ForeignKey(NetworkElement, on_delete=models.PROTECT, related_name="measurements")
     measurement_type = models.ForeignKey(MeasurementType, on_delete=models.PROTECT, related_name="measurements")
     measurement_unit = models.ForeignKey(MeasurementUnit, on_delete=models.PROTECT, related_name="measurements")
-    data_collection_config = models.JSONField(null=True, blank=True)
     customer_account = models.CharField(max_length=255, blank=True)
     meter_account = models.CharField(max_length=255, blank=True)
+
+    # The Data Collection Configuration is its own entity (DataCollectionConfiguration).
+    # This property keeps the established ``data_collection_config`` API/ORM contract:
+    # assigning stores the value and ``save()`` persists it (``None`` removes it).
+    @property
+    def data_collection_config(self):
+        pending = self.__dict__.get("_pending_config", _UNSET)
+        if pending is not _UNSET:
+            return pending
+        try:
+            return self.collection_configuration.config
+        except DataCollectionConfiguration.DoesNotExist:
+            return None
+
+    @data_collection_config.setter
+    def data_collection_config(self, value):
+        self._pending_config = value
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        pending = self.__dict__.pop("_pending_config", _UNSET)
+        if pending is _UNSET:
+            return
+        if pending is None:
+            DataCollectionConfiguration.objects.filter(measurement=self).delete()
+        else:
+            DataCollectionConfiguration.objects.update_or_create(
+                measurement=self,
+                defaults={"config": pending, "department_id": self.department_id, "updated_by_id": self.updated_by_id},
+                create_defaults={
+                    "config": pending, "department_id": self.department_id,
+                    "created_by_id": self.created_by_id, "updated_by_id": self.updated_by_id,
+                },
+            )
+        self._state.fields_cache.pop("collection_configuration", None)
+
+
+class DataCollectionConfiguration(models.Model):
+    """External data-collection settings of one Measurement (Phase 2 design, Table 2)."""
+
+    measurement = models.OneToOneField(
+        Measurement, on_delete=models.CASCADE, related_name="collection_configuration"
+    )
+    department = models.ForeignKey(
+        settings.METADATA_DEPARTMENT_MODEL, on_delete=models.PROTECT, related_name="+", editable=False,
+    )
+    config = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+
+    def __str__(self):
+        return f"Configuration of {self.measurement_id}"
