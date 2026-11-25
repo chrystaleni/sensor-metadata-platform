@@ -39,4 +39,22 @@ describe('GIS resource identities',()=>{
   rerender(<GisMap records={{'physical-devices':[],'network-elements':[]}}/>);
   await waitFor(()=>expect(mocks.view).toHaveBeenCalledWith([35.14,33.39],10,{animate:false}));
  });
+ it('zooms to and selects the record passed from "Show on map"',async()=>{
+  mocks.fit.mockClear();
+  render(<GisMap focusKey="Network Element:1" records={{'physical-devices':[{id:1,name:'Device',latitude:35,longitude:33}],'network-elements':[{id:1,name:'Inlet',geometryType:'Point',latitude:35,longitude:34}]}}/>);
+  await waitFor(()=>expect(mocks.fit).toHaveBeenCalled());
+  expect(mocks.fit.mock.calls[0][0].name).toBe('Inlet');
+  expect(screen.getByRole('button',{name:/Inlet Network Element/})).toHaveClass('selected');
+  expect(screen.getByText('Selected metadata').parentElement.querySelector('dd').textContent).toBe('Inlet');
+ });
+ it('searches the map records by name, identifier or type',async()=>{
+  render(<GisMap records={{'physical-devices':[{id:1,name:'Pump RTU',latitude:35,longitude:33,type:'Logger'}],'network-elements':[{id:2,name:'Inlet',geometryType:'Point',latitude:35,longitude:34,externalId:'ERP: NE-77'}]}}/>);
+  const search=screen.getByLabelText('Search the map');
+  fireEvent.change(search,{target:{value:'ne-77'}});
+  expect(screen.getByRole('button',{name:/Inlet Network Element/})).toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:/Pump RTU/})).not.toBeInTheDocument();
+  fireEvent.change(search,{target:{value:'logger'}});
+  expect(screen.getByRole('button',{name:/Pump RTU/})).toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:/Inlet Network Element/})).not.toBeInTheDocument();
+ });
 });

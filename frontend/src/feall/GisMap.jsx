@@ -6,12 +6,16 @@ import {loadLeaflet,buildMapFeatures,featureKey} from './mapUtils';
 
 // Default view: Cyprus around Nicosia.
 const DEFAULT_VIEW={center:[35.14,33.39],zoom:10};
-export default function GisMap({records}){
+// focusKey ("Network Element:7") selects and zooms to one record, e.g. from "Show on map" in record details.
+export default function GisMap({records,focusKey=null}){
   const mapElement=useRef(null),mapRef=useRef(null),layerRef=useRef(null),featureLayers=useRef({});
-  const [selected,setSelected]=useState(null),[error,setError]=useState(''),[ready,setReady]=useState(false);
-  const [kindFilter,setKindFilter]=useState('all'),[showInactive,setShowInactive]=useState(true);
+  const [selected,setSelected]=useState(focusKey),[error,setError]=useState(''),[ready,setReady]=useState(false);
+  const [kindFilter,setKindFilter]=useState('all'),[showInactive,setShowInactive]=useState(true),[query,setQuery]=useState('');
+  const focused=useRef(null);
   const {features,invalid}=useMemo(()=>buildMapFeatures(records),[records]);
-  const visible=useMemo(()=>features.filter(f=>(kindFilter==='all'||f.properties.kind===kindFilter)&&(showInactive||f.properties.active)),[features,kindFilter,showInactive]);
+  // Search by name, identifier or type (Phase 2, scenario S3).
+  const matches=f=>{const q=query.trim().toLowerCase();return !q||[f.properties.name,f.properties.externalId,f.properties.type].some(v=>String(v??'').toLowerCase().includes(q));};
+  const visible=useMemo(()=>features.filter(f=>(kindFilter==='all'||f.properties.kind===kindFilter)&&(showInactive||f.properties.active)&&matches(f)),[features,kindFilter,showInactive,query]);// eslint-disable-line react-hooks/exhaustive-deps
   const invalidVisible=invalid.filter(row=>{
     const kind=records['physical-devices']?.includes(row)?'Physical Device':'Network Element';
     return (kindFilter==='all'||kindFilter===kind)&&(showInactive||row.active!==false);
@@ -43,11 +47,13 @@ export default function GisMap({records}){
       layer.bindTooltip(tooltipText,{sticky:true});
       layer.addTo(group);featureLayers.current[featureKey(feature)]=layer;
     }
-    if(group.getLayers().length&&group.getBounds().isValid())mapRef.current.fitBounds(group.getBounds().pad(0.25),{maxZoom:15,animate:false});
+    const target=focusKey&&focused.current!==focusKey?featureLayers.current[focusKey]:null;
+    if(target&&target.getBounds().isValid()){focused.current=focusKey;mapRef.current.fitBounds(target.getBounds().pad(0.8),{maxZoom:15,animate:false});}
+    else if(group.getLayers().length&&group.getBounds().isValid())mapRef.current.fitBounds(group.getBounds().pad(0.25),{maxZoom:15,animate:false});
     // Nothing to show (e.g. an empty Department): go back to the default view instead of keeping the previous area.
     else mapRef.current.setView(DEFAULT_VIEW.center,DEFAULT_VIEW.zoom,{animate:false});
     mapRef.current.invalidateSize();
-  },[ready,visible]);
+  },[ready,visible,focusKey]);
   const current=visible.find(f=>featureKey(f)===selected);
   const fitAll=()=>{const group=layerRef.current;if(group?.getLayers().length&&group.getBounds().isValid())mapRef.current?.fitBounds(group.getBounds().pad(0.25),{maxZoom:15});};
   const focus=(feature)=>{
@@ -58,6 +64,7 @@ export default function GisMap({records}){
   return <section className="fe-panel">
     <div className="fe-panel-head"><div><h2>GIS Map</h2><p>Physical Devices and Network Elements · WGS84 (EPSG:4326)</p></div></div>
     <div className="gis-controls">
+      <label>Search <input type="search" aria-label="Search the map" placeholder="Name, identifier or type" value={query} onChange={e=>setQuery(e.target.value)}/></label>
       <label>Show <select value={kindFilter} onChange={e=>setKindFilter(e.target.value)}><option value="all">All geographic records</option><option value="Physical Device">Physical Devices</option><option value="Network Element">Network Elements</option></select></label>
       <label className="gis-check"><input type="checkbox" checked={showInactive} onChange={e=>setShowInactive(e.target.checked)}/> Include inactive</label>
       <span>{visible.length} mapped · {invalidVisible.length} missing or invalid</span><button type="button" className="gis-fit" onClick={fitAll} disabled={!ready||!visible.length}>Show all visible</button>
