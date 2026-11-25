@@ -16,6 +16,16 @@ class DepartmentAccessPolicy(NoAccessPolicy):
     def can_manage_controlled_lists(self, request):
         return not self._api_key(request) and self._role(request) == UserRole.Role.SYSTEM_ADMIN
 
+    def archive_manager_department_ids(self, request):
+        if self._api_key(request):
+            return ()
+        role = self._role(request)
+        if role == UserRole.Role.SYSTEM_ADMIN:
+            return Department.objects.values_list("pk", flat=True)
+        if role == UserRole.Role.DEPARTMENT_ADMIN:
+            return UserDepartment.objects.filter(user_id=request.user.pk).values_list("department_id", flat=True)
+        return ()
+
     @staticmethod
     def _api_key(request):
         from api_keys.models import APIKey
