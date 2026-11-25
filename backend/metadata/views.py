@@ -1,4 +1,4 @@
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.utils import timezone
 from django.utils.functional import cached_property
@@ -29,6 +29,23 @@ class ActiveDependencyConflict(APIException):
     status_code = 409
     default_detail = "Archive the active records that reference this record first."
     default_code = "active_dependencies"
+
+
+class ArchiveConflict(APIException):
+    status_code = 409
+    default_detail = "This archived record cannot be changed."
+    default_code = "archive_conflict"
+
+
+# Related records that must be active before a record can be restored.
+RESTORE_REQUIREMENTS = (
+    ("device_type", "device type"),
+    ("element_type", "element type"),
+    ("physical_device", "physical device"),
+    ("network_element", "network element"),
+    ("measurement_type", "measurement type"),
+    ("measurement_unit", "measurement unit"),
+)
 
 
 class DepartmentScope:
@@ -112,13 +129,86 @@ class MetadataViewSet(DepartmentScope, viewsets.ModelViewSet):
         self.active_records().filter(pk=instance.pk).archive(self.request.user, at=at)
         return at
 
+    # --- Archived records: only archive managers see, restore and permanently delete them.
+
+    def include_archived(self):
+        value = self.request.query_params.get("include_archived")
+        if value is None or self.is_write:
+            return False
+        try:
+            return serializers.BooleanField().run_validation(value)
+        except serializers.ValidationError as error:
+            raise serializers.ValidationError({"include_archived": error.detail}) from error
+
+    def archive_manager_department_ids(self):
+        return set(self.access_policy.archive_manager_department_ids(self.request))
+
+    def archived_object(self):
+        model = self.serializer_class.Meta.model
+        try:
+            pk = serializers.IntegerField(min_value=1, max_value=2**63 - 1).run_validation(self.kwargs["pk"])
+        except serializers.ValidationError:
+            raise NotFound from None
+        instance = model.objects.select_for_update().filter(pk=pk, deleted_at__isnull=False).first()
+        if instance is None or instance.department_id not in self.archive_manager_department_ids():
+            raise NotFound
+        return instance
+
+    @action(detail=True, methods=["post"])
+    def restore(self, request, pk=None):
+        with transaction.atomic():
+            instance = self.archived_object()
+            lock_metadata_write(instance.department_id, controlled_list=self.controlled_list)
+            for field, label in RESTORE_REQUIREMENTS:
+                related = getattr(instance, field, None)
+                if related is not None and related.deleted_at is not None:
+                    raise ArchiveConflict(f"Restore the {label} '{related.name}' first.")
+            archived_at, now = instance.deleted_at, timezone.now()
+            try:
+                with transaction.atomic():
+                    type(instance).objects.filter(pk=instance.pk).update(
+                        deleted_at=None, deleted_by=None, updated_at=now, updated_by=request.user,
+                    )
+                    self.restore_children(instance, archived_at, now)
+            except IntegrityError:
+                raise ArchiveConflict(
+                    "An active record with the same name or identifier already exists. "
+                    "Rename or archive that record first."
+                ) from None
+        instance.refresh_from_db()
+        return Response(self.get_serializer(instance).data)
+
+    def restore_children(self, instance, archived_at, now):
+        pass
+
+    @action(detail=True, methods=["delete"])
+    def purge(self, request, pk=None):
+        with transaction.atomic():
+            instance = self.archived_object()
+            lock_metadata_write(instance.department_id, controlled_list=self.controlled_list)
+            for relation in self.dependent_relations:
+                if getattr(instance, relation).exists():
+                    raise ArchiveConflict(
+                        "Other records still use this one. Permanently delete those archived records first."
+                    )
+            self.delete_children(instance)
+            instance.delete()
+        return Response(status=204)
+
+    def delete_children(self, instance):
+        pass
+
 
 class OperationalViewSet(MetadataViewSet):
     def get_queryset(self):
         scope = Q(department_id__in=self.access_policy.readable_department_ids(self.request))
         if self.is_write:
             scope |= Q(department_id__in=self.access_policy.writable_department_ids(self.request))
-        return self.active_records().filter(scope)
+        records = self.active_records()
+        if self.include_archived():
+            visible = Q(deleted_at__isnull=True) | Q(department_id__in=self.archive_manager_department_ids())
+            records = self.serializer_class.Meta.model.objects.filter(visible)
+        return records.filter(scope)
 
     def get_object(self):
         instance = super().get_object()
@@ -149,7 +239,15 @@ class ControlledListViewSet(MetadataViewSet):
                 raise serializers.ValidationError({"include_inactive": error.detail}) from error
             if show_history:
                 return self.serializer_class.Meta.model.objects.all()
+        if self.include_archived() and self.archive_manager_department_ids():
+            return self.serializer_class.Meta.model.objects.all()
         return queryset
+
+    def archive_manager_department_ids(self):
+        # The shared lists belong to Platform; only list managers handle their archive.
+        if self.platform_department_id is None or not self.access_policy.can_manage_controlled_lists(self.request):
+            return set()
+        return {self.platform_department_id}
 
     def department_for_create(self):
         if not self.access_policy.can_manage_controlled_lists(self.request) or self.platform_department_id is None:
@@ -233,6 +331,15 @@ class NetworkElementViewSet(OperationalViewSet):
     def perform_destroy(self, instance):
         at = super().perform_destroy(instance)
         instance.external_identifiers.archive(self.request.user, at=at)
+
+    def restore_children(self, instance, archived_at, now):
+        # Bring back the identifiers that were archived together with the element.
+        instance.external_identifiers.filter(deleted_at=archived_at).update(
+            deleted_at=None, deleted_by=None, updated_at=now, updated_by=self.request.user,
+        )
+
+    def delete_children(self, instance):
+        instance.external_identifiers.all().delete()
 
 
 class MeasurementViewSet(OperationalViewSet):

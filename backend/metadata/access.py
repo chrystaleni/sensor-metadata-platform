@@ -14,6 +14,10 @@ class NoAccessPolicy:
     def can_manage_controlled_lists(self, request):
         return False
 
+    def archive_manager_department_ids(self, request):
+        """Departments whose archived records this user may see, restore and permanently delete."""
+        return ()
+
 
 def get_access_policy():
     path = getattr(settings, "METADATA_ACCESS_POLICY", "metadata.access.NoAccessPolicy")
