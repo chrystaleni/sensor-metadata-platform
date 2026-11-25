@@ -178,3 +178,18 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
 }
+
+# Application log: authentication events and administrative actions are written to the console
+# (docker compose logs backend). LOG_LEVEL may raise or lower the detail; passwords are never logged.
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").strip().upper() or "INFO"
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {"plain": {"format": "%(asctime)s %(levelname)s %(name)s %(message)s"}},
+    "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "plain"}},
+    "loggers": {
+        name: {"handlers": ["console"], "level": LOG_LEVEL, "propagate": False}
+        for name in ("platform_security", "metadata", "api_keys")
+    },
+}
+

@@ -1,4 +1,5 @@
 import json
+import logging
 
 from django.contrib import auth
 from django.http import JsonResponse
@@ -7,6 +8,18 @@ from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST
 
 from .login_throttle import LoginThrottled, LoginThrottleUnavailable, authenticate_with_throttle
+
+# Authentication events go to the application log (Phase 2, scenario S4). Passwords are never logged.
+logger = logging.getLogger("platform_security.auth")
+
+
+def _log_name(username):
+    """A username safe for one log line: printable characters only, at most 150."""
+    return "".join(ch if ch.isprintable() else "?" for ch in username[:150])
+
+
+def _client(request):
+    return request.META.get("REMOTE_ADDR", "unknown")
 
 
 def session_response(user):
@@ -54,6 +67,7 @@ def login(request):
     try:
         user = authenticate_with_throttle(request, username, password)
     except LoginThrottled as error:
+        logger.warning("Login throttled for username=%r from %s", _log_name(username), _client(request))
         return JsonResponse(
             {"detail": "Too many login attempts. Try again later."},
             status=429,
@@ -66,7 +80,10 @@ def login(request):
             headers={"Retry-After": "1"},
         )
     if user is None:
+        # Wrong password, unknown username or deactivated account: the same generic answer, one log line.
+        logger.warning("Failed login for username=%r from %s", _log_name(username), _client(request))
         return JsonResponse({"detail": "Invalid username or password."}, status=400)
+    logger.info("Login of user %s from %s", user.pk, _client(request))
     previous_key = request.session.session_key
     auth.login(request, user)
     if previous_key and request.session.session_key == previous_key:
@@ -87,5 +104,7 @@ def session(request):
 def logout(request):
     if not request.user.is_authenticated:
         return JsonResponse({"detail": "Authentication credentials were not provided."}, status=403)
+    user_id = request.user.pk
     auth.logout(request)
+    logger.info("Logout of user %s", user_id)
     return session_response(request.user)
