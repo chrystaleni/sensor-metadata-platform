@@ -127,3 +127,24 @@ it('filters record tables by related records',async()=>{
  fireEvent.click(screen.getByRole('button',{name:'Clear filters'}));
  await waitFor(()=>expect(listCalls.at(-1)).toBe(null));
 });
+
+it('keeps showing the name of an archived shared value that records still use',async()=>{
+ const catalogCalls=[];
+ vi.stubGlobal('fetch',vi.fn(async(raw)=>{
+  const url=new URL(raw);let data;
+  if(url.pathname.endsWith('/auth/session/'))data={authenticated:true};
+  else if(url.pathname.endsWith('/auth/context/'))data={authenticated:true,role:'EDITOR',departments:[{id:7,name:'North',organisation:'Water',writable:true}],permissions:{manage_catalogs:false,manage_api_keys:false}};
+  else if(url.pathname.endsWith('/physical-device-types/')){catalogCalls.push(url.searchParams.get('include_inactive'));data={count:2,results:[{id:11,name:'Logger',is_active:true},{id:12,name:'Old meter',is_active:false}]};}
+  else if(url.pathname.endsWith('/physical-devices/'))data={count:1,results:[{id:1,name:'Pump RTU',department:7,device_type:12,is_active:true}]};
+  else data={count:0,results:[]};
+  return {ok:true,status:200,json:async()=>data};
+ }));
+ render(<App/>);await screen.findByRole('button',{name:'Profile menu'});
+ fireEvent.click(screen.getByRole('link',{name:'Physical Devices',exact:true}));
+ expect(await screen.findByText('Old meter (archived)')).toBeInTheDocument();
+ expect(catalogCalls).toContain('true');
+ fireEvent.click(screen.getByRole('button',{name:/^\+ Add/}));
+ const typeSelect=screen.getByRole('dialog').querySelectorAll('select')[0];
+ expect([...typeSelect.options].map(o=>o.textContent)).not.toContain('Old meter (#12)');
+ expect([...typeSelect.options].map(o=>o.textContent)).toContain('Logger (#11)');
+});
