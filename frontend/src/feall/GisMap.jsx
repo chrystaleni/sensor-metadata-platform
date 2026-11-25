@@ -1,4 +1,4 @@
-import {loadGreekMapStyle,addGreekBasemap} from './greekBasemap';
+import {loadGreekMapStyle,addMapControls} from './greekBasemap';
 import {useEffect,useMemo,useRef,useState} from 'react';
 import './gis.css';
 
@@ -26,7 +26,7 @@ export default function GisMap({records,focusKey=null}){
     Promise.all([loadLeaflet(),loadGreekMapStyle().catch(()=>null)]).then(([L,style])=>{
       if(!active||!mapElement.current)return;
       const map=L.map(mapElement.current,{scrollWheelZoom:false,minZoom:1,maxZoom:19});map.fitBounds(CYPRUS_BOUNDS);
-      addGreekBasemap(map,style,L);
+      addMapControls(map,style,L);
       map.attributionControl.addAttribution('© OpenStreetMap contributors | OpenFreeMap');
       mapRef.current=map;layerRef.current=L.featureGroup().addTo(map);setReady(true);
       requestAnimationFrame(()=>map.invalidateSize());

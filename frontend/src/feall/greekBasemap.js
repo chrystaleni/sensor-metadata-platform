@@ -82,6 +82,10 @@ export function supportsWebGL() {
 
 // Plain image tiles without place names: no WebGL, no web worker, no style file.
 export function addRasterBasemap(map, L) {
+  return rasterBasemap(L).addTo(map);
+}
+
+export function rasterBasemap(L) {
   // Tile servers may refuse requests without a Referer. The app sends Referrer-Policy: same-origin,
   // so this layer asks the browser to send its origin (never the page path) to the tile server.
   return L.tileLayer(RASTER_URL, {
@@ -89,13 +93,13 @@ export function addRasterBasemap(map, L) {
     maxNativeZoom: 16,
     attribution: 'Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap contributors',
     referrerPolicy: 'strict-origin-when-cross-origin'
-  }).addTo(map);
+  });
 }
 
 // The Greek vector basemap needs WebGL, a module web worker and tiles.openfreemap.org. When any of these is
 // missing (graphics acceleration off, older browser, blocked network) it only paints its beige background,
 // so fall back to plain, label-free tiles instead of leaving an empty map.
-export function addGreekBasemap(map, style, L = globalThis.L, { timeout = VECTOR_TIMEOUT_MS } = {}) {
+export function addGreekBasemap(map, style, L = globalThis.L, { timeout = VECTOR_TIMEOUT_MS, onFallback } = {}) {
   if (!style || !supportsWebGL()) {
     return addRasterBasemap(map, L);
   }
@@ -114,7 +118,8 @@ export function addGreekBasemap(map, style, L = globalThis.L, { timeout = VECTOR
     fellBack = true;
     clearTimeout(timer);
     try { map.removeLayer(layer); } catch { /* already gone */ }
-    addRasterBasemap(map, L);
+    const raster = addRasterBasemap(map, L);
+    onFallback?.(layer, raster);
   };
   const vector = layer.getMaplibreMap?.();
   let loaded = false;
@@ -141,4 +146,63 @@ export function addGreekBasemap(map, style, L = globalThis.L, { timeout = VECTOR
   }
 
   return layer;
+}
+
+// Orthophoto of the Department of Lands and Surveys (Republic of Cyprus): aerial imagery, no place names.
+const DLS_ORTHO_2019 = 'https://eservices.dls.moi.gov.cy/arcgis/services/BASEMAPS/Orthoimagery_2019_WebMercator/MapServer/WMSServer';
+export const BASEMAP_NAMES = { map: 'Χάρτης', plain: 'Απλός (χωρίς ονόματα)', ortho: 'Ορθοφωτοχάρτης 2019 (ΤΚΧ)' };
+
+export function orthophotoBasemap(L) {
+  return L.tileLayer.wms(DLS_ORTHO_2019, {
+    layers: '0',
+    format: 'image/png',
+    transparent: false,
+    maxZoom: 19,
+    attribution: '© Department of Lands and Surveys'
+  });
+}
+
+// The GIS Map's basemap switcher (top right), metric scale and fullscreen button. The "Χάρτης" entry is the
+// Greek vector map, or the label-free tiles when the vector map cannot draw.
+export function addMapControls(map, style, L = globalThis.L, options = {}) {
+  const control = L.control.layers({}, {}, { position: 'topright', collapsed: true });
+  const main = addGreekBasemap(map, style, L, {
+    ...options,
+    onFallback: (vector, raster) => {
+      control.removeLayer(vector);
+      control.addBaseLayer(raster, BASEMAP_NAMES.map);
+    }
+  });
+  control.addBaseLayer(main, BASEMAP_NAMES.map);
+  control.addBaseLayer(rasterBasemap(L), BASEMAP_NAMES.plain);
+  control.addBaseLayer(orthophotoBasemap(L), BASEMAP_NAMES.ortho);
+  control.addTo(map);
+  L.control.scale({ position: 'bottomleft', imperial: false }).addTo(map);
+  addFullscreenControl(map, L);
+  return control;
+}
+
+function addFullscreenControl(map, L) {
+  const container = map.getContainer();
+  if (!container?.requestFullscreen) return;
+  const Fullscreen = L.Control.extend({
+    options: { position: 'topleft' },
+    onAdd() {
+      const button = L.DomUtil.create('button', 'leaflet-bar gis-fullscreen');
+      button.type = 'button';
+      button.title = 'Πλήρης οθόνη';
+      button.setAttribute('aria-label', 'Πλήρης οθόνη');
+      button.textContent = '⛶';
+      L.DomEvent.disableClickPropagation(button);
+      L.DomEvent.on(button, 'click', () => {
+        if (document.fullscreenElement) document.exitFullscreen?.();
+        else container.requestFullscreen().catch(() => {});
+      });
+      return button;
+    }
+  });
+  new Fullscreen().addTo(map);
+  const resize = () => map.invalidateSize();
+  document.addEventListener('fullscreenchange', resize);
+  map.on('unload', () => document.removeEventListener('fullscreenchange', resize));
 }
