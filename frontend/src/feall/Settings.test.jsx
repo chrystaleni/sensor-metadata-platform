@@ -50,3 +50,19 @@ it('lets every role log out from Settings',()=>{
   cleanup();
  }
 });
+
+it('lets System Administrators delete Organisations and Departments, but never Platform',async()=>{
+ const sent=[];vi.stubGlobal('confirm',()=>true);
+ const sysApi=vi.fn(async(path,options={})=>{sent.push({path,method:options.method||'GET'});
+  if(options.method)return {};
+  if(path.startsWith('/organisations/'))return [{id:1,name:'Platform',code:'platform'},{id:2,name:'Spare',code:'spare'}];
+  if(path.startsWith('/departments/'))return [{id:1,name:'Platform',organisation:1},{id:9,name:'Empty',organisation:2}];
+  return [];});
+ render(<Settings session={mk('SYSTEM_ADMIN')} api={sysApi} department="7" onDepartment={()=>{}} pickable={deps}/>);
+ fireEvent.click(await screen.findByRole('button',{name:'Delete Department Empty'}));
+ await vi.waitFor(()=>expect(sent.some(c=>c.path==='/departments/9/'&&c.method==='DELETE')).toBe(true));
+ fireEvent.click(screen.getByRole('button',{name:'Delete Organisation Spare'}));
+ await vi.waitFor(()=>expect(sent.some(c=>c.path==='/organisations/2/'&&c.method==='DELETE')).toBe(true));
+ expect(screen.queryByRole('button',{name:'Delete Organisation Platform'})).not.toBeInTheDocument();
+ expect(screen.queryByRole('button',{name:'Delete Department Platform'})).not.toBeInTheDocument();
+});

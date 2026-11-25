@@ -25,3 +25,23 @@ it('loads key-management records beyond the first server page',async()=>{
  render(<ApiKeys department="7" allowed/>);
  expect(await screen.findByRole('button',{name:'Revoke Key 26',exact:true})).toBeInTheDocument();
 });
+
+function keysFetch(calls){const past=new Date(Date.now()-86400000).toISOString(),future=new Date(Date.now()+86400000).toISOString();
+ return vi.fn(async(url,options={})=>{calls.push({url:String(url),method:options.method||'GET'});
+  return {ok:true,status:options.method==='DELETE'?204:200,json:async()=>(options.method&&options.method!=='GET')?{}:[{id:1,name:'Live',prefix:'a',expires_at:future,revoked_at:null},{id:2,name:'Gone',prefix:'b',expires_at:future,revoked_at:past},{id:3,name:'Old',prefix:'c',expires_at:past,revoked_at:null}]}})}
+it('lets System Administrators delete revoked and expired keys',async()=>{
+ const calls=[];vi.stubGlobal('fetch',keysFetch(calls));vi.stubGlobal('confirm',()=>true);
+ render(<ApiKeys department="7" allowed canDelete/>);
+ expect(await screen.findByRole('button',{name:'Revoke Live'})).toBeInTheDocument();
+ expect(screen.queryByRole('button',{name:'Delete Live'})).not.toBeInTheDocument();
+ expect(screen.queryByRole('button',{name:'Revoke Old'})).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'Delete Gone'}));
+ await vi.waitFor(()=>expect(calls.some(c=>c.url.includes('/api-keys/2/purge/')&&c.method==='DELETE')).toBe(true));
+ expect(screen.getByRole('button',{name:'Delete Old'})).toBeInTheDocument();
+});
+it('offers only Revoke to Department Administrators',async()=>{
+ vi.stubGlobal('fetch',keysFetch([]));
+ render(<ApiKeys department="7" allowed/>);
+ await screen.findByRole('button',{name:'Revoke Live'});
+ expect(screen.queryByRole('button',{name:/^Delete /})).not.toBeInTheDocument();
+});

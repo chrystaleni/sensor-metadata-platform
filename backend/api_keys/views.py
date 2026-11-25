@@ -3,6 +3,7 @@ from datetime import timedelta
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import mixins, serializers, status, viewsets
+from rest_framework.decorators import action
 from .authentication import KeyAwareSessionAuthentication
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
@@ -65,6 +66,19 @@ class APIKeyViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin,
     def destroy(self, request, *args, **kwargs):
         key = self.get_object()
         APIKey.objects.filter(pk=key.pk, revoked_at__isnull=True).update(revoked_at=timezone.now())
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["delete"])
+    def purge(self, request, pk=None):
+        """System Administrators only: remove a revoked or expired key from the list."""
+        from platform_security.admin_api import is_system_admin  # avoids an import cycle at load time
+
+        if not is_system_admin(request):
+            raise PermissionDenied("System Administrator access is required.")
+        key = self.get_object()
+        if key.revoked_at is None and key.expires_at > timezone.now():
+            return Response({"detail": "Revoke the key before deleting it."}, status=status.HTTP_409_CONFLICT)
+        key.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def finalize_response(self, request, response, *args, **kwargs):

@@ -62,3 +62,21 @@ it('shows an error and no password when the administrator password is wrong',asy
  expect(await screen.findByRole('alert')).toHaveTextContent(/incorrect/i);
  expect(screen.queryByLabelText('New password')).not.toBeInTheDocument();
 });
+
+function usersFetch(calls){return vi.fn(async(url,options={})=>{calls.push({url:String(url),method:options.method||'GET'});
+ return {ok:true,status:options.method==='DELETE'?204:200,json:async()=>(options.method&&options.method!=='GET')?{}:[{id:5,username:'old',role:'EDITOR',departments:[7],is_active:false}]}})}
+it('lets System Administrators reactivate or delete a deactivated user',async()=>{
+ const calls=[];vi.stubGlobal('fetch',usersFetch(calls));vi.stubGlobal('confirm',()=>true);
+ render(<UsersAdmin departments={depts} role="SYSTEM_ADMIN" allowed currentUser="sam"/>);
+ fireEvent.click(await screen.findByRole('button',{name:'Reactivate old'}));
+ await vi.waitFor(()=>expect(calls.some(c=>c.url.endsWith('/users/5/reactivate/')&&c.method==='POST')).toBe(true));
+ fireEvent.click(await screen.findByRole('button',{name:'Delete old'}));
+ await vi.waitFor(()=>expect(calls.some(c=>c.url.endsWith('/users/5/purge/')&&c.method==='DELETE')).toBe(true));
+});
+it('does not offer Reactivate or Delete to Department Administrators',async()=>{
+ vi.stubGlobal('fetch',usersFetch([]));
+ render(<UsersAdmin departments={depts} role="DEPARTMENT_ADMIN" allowed currentUser="sam"/>);
+ await screen.findByText('old');
+ expect(screen.queryByRole('button',{name:'Reactivate old'})).not.toBeInTheDocument();
+ expect(screen.queryByRole('button',{name:'Delete old'})).not.toBeInTheDocument();
+});
