@@ -44,7 +44,7 @@ async function create(page,section,name,fields){
  await dialog.getByLabel('Name *',{exact:true}).fill(name);
  await fields(dialog);
  const response=page.waitForResponse(r=>r.request().method()==='POST'&&r.url().includes('/api/v1/'));
- await dialog.getByRole('button',{name:'Save to Django'}).click();
+ await dialog.getByRole('button',{name:'Save',exact:true}).click();
  expect((await response).status()).toBe(201);
  await expect(dialog).not.toBeVisible();
  await expect(page.getByRole('cell',{name,exact:true})).toBeVisible();
@@ -69,7 +69,7 @@ test('real session, relational CRUD, persistence, GIS, export and scoped API key
  const deviceRow=page.getByRole('row').filter({has:page.getByRole('cell',{name:'E2E Device',exact:true})});
  await deviceRow.getByRole('button',{name:'Edit',exact:true}).click();
  await page.getByRole('dialog').getByLabel('Description',{exact:true}).fill('Updated via browser');
- await page.getByRole('button',{name:'Save to Django'}).click();
+ await page.getByRole('button',{name:'Save',exact:true}).click();
 
  await verifyDescription(page,deviceRow,'Updated via browser');
  await page.reload();
@@ -103,7 +103,7 @@ test('real session, relational CRUD, persistence, GIS, export and scoped API key
  await elementRow.getByRole('button',{name:'Edit',exact:true}).click();
  await page.getByRole('dialog').getByLabel('Description',{exact:true}).fill('Updated network element');
  await page.getByRole('dialog').getByRole('textbox',{name:'Geometry (GeoJSON)',exact:true}).fill('{"type":"Polygon","coordinates":[[[33,35],[34,35],[34,36],[33,35]]]}');
- await page.getByRole('button',{name:'Save to Django'}).click();
+ await page.getByRole('button',{name:'Save',exact:true}).click();
  await verifyDescription(page,elementRow,'Updated network element');
 
  await create(page,'Measurements','E2E Measurement',async dialog=>{
@@ -117,7 +117,7 @@ test('real session, relational CRUD, persistence, GIS, export and scoped API key
  let row=page.getByRole('row').filter({has:page.getByRole('cell',{name:'E2E Measurement',exact:true})});
  await row.getByRole('button',{name:'Edit',exact:true}).click();
  await page.getByRole('dialog').getByLabel('Name *',{exact:true}).fill('E2E Updated Measurement');
- await page.getByRole('button',{name:'Save to Django'}).click();
+ await page.getByRole('button',{name:'Save',exact:true}).click();
  await expect(page.getByRole('cell',{name:'E2E Updated Measurement',exact:true})).toBeVisible();
 
  const measurementIdCell = page.getByRole('row').filter({
