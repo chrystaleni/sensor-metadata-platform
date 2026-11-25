@@ -30,7 +30,7 @@ The first complete release of the Sensor Metadata Management Platform: a React/V
 - OpenAPI documentation at `/api/v1/docs/` after sign-in.
 
 ### Upgrade notes
-- The backend never migrates automatically. Run `python manage.py migrate` after every update.
+- The backend never migrates automatically. Run `python manage.py migrate` after every update. This release adds `api_keys.0002_optional_expiry`.
 - Set `METADATA_PLATFORM_DEPARTMENT_ID` and `METADATA_ACCESS_POLICY=platform_security.access.DepartmentAccessPolicy` in `.env` (see the README).
 
 ### Known limitations
@@ -39,5 +39,12 @@ The first complete release of the Sensor Metadata Management Platform: a React/V
 - Behind the bundled nginx, the address recorded for a request is the proxy's address.
 - `scripts/validate_disposable.sh` reads a developer's local `.env`. If that file sets `METADATA_PLATFORM_DEPARTMENT_ID`, the seed step fails; run the script with that variable unset.
 
-### In review
-Open pull requests at the time of writing: table filters (#52), editing a user's role and Departments (#53), new fields in the import template (#54), template download (#55), login events in the application log (#56), names of archived list values (#57), "Show on map" and map search (#58), optional API-key expiration (#59), highlighted form errors (#60). Update these notes as they merge.
+### Added after the Phase 2 comparison
+- Filters on the record tables (#52) and editing a user's role and Departments (#53).
+- New client fields in the platform import template (#54) and a **Download template** button (#55).
+- Login events in the application log; `LOG_LEVEL` sets the detail (#56).
+- Names of archived shared values stay visible on records that use them (#57).
+- **Show on map** from record details and search on the GIS Map (#58).
+- Optional API-key expiration and Revoke for expired keys; migration `api_keys.0002` (#59).
+- Invalid form fields are highlighted with their message (#60).
+- User guide, extension guide and these release notes (#61).
