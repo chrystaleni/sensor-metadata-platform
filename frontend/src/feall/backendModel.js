@@ -1,8 +1,8 @@
 import {geometryError} from './geometryValidation';
 export const resources = {
   measurements: {label:'Measurements', fields:[['name','Name','text',true],['description','Description','textarea'],['physical_device','Physical Device','physical-devices',true],['network_element','Network Element','network-elements',true],['measurement_type','Measurement Type','measurement-types',true],['measurement_unit','Measurement Unit','measurement-units',true],['customer_account','Customer Account'],['meter_account','Meter Account'],['data_collection_config','Collection Config (JSON)','json']]},
-  'physical-devices': {label:'Physical Devices',fields:[['name','Name','text',true],['description','Description','textarea'],['device_type','Device Type','physical-device-types',true],['location','Location (GeoJSON Point)','geo']]},
-  'network-elements': {label:'Network Elements',fields:[['name','Name','text',true],['description','Description','textarea'],['element_type','Element Type','network-element-types',true],['geometry','Geometry (GeoJSON)','geo'],['external_identifiers','External Identifiers (JSON array; blank preserves, [] clears)','json'],['dma_model_id','DMA Model ID'],['strategic_model_id','Strategic Model ID']]},
+  'physical-devices': {label:'Physical Devices',fields:[['name','Name','text',true],['description','Description','textarea'],['device_type','Device Type','physical-device-types',true],['location','Location (GeoJSON Point)','geo'],['communication_parameters','Communication Parameters (JSON object, e.g. IP)','json']]},
+  'network-elements': {label:'Network Elements',fields:[['name','Name','text',true],['description','Description','textarea'],['element_type','Element Type','network-element-types',true],['geometry','Geometry (GeoJSON)','geo'],['external_identifiers','External Identifiers (JSON array; blank preserves, [] clears)','json'],['dma_model_id','DMA Model ID'],['strategic_model_id','Strategic Model ID'],['network_area','Network Area'],['elevation','Elevation (m)','number'],['address','Address']]},
   'measurement-types':{label:'Measurement Types',fields:[['name','Name','text',true],['description','Description','textarea']]},
   'measurement-units':{label:'Measurement Units',fields:[['name','Name','text',true],['description','Description','textarea'],['symbol','Symbol']]},
   'physical-device-types':{label:'Physical Device Types',fields:[['name','Name','text',true],['description','Description','textarea']]},
@@ -18,7 +18,7 @@ export function parseRecordForm(resource, form, department, editing=false){
     if(required&&!raw)throw Error(`${key} is required.`);
     // Omit a blank identifier field on create and PATCH; [] explicitly clears it.
     if(!raw&&key==='external_identifiers')continue;
-    if(!raw){if(type==='geo'||type==='json')result[key]=null;else if(type&&resources[type]){if(required)throw Error(`${key} is required.`);}else result[key]='';continue;}
+    if(!raw){if(type==='geo'||type==='json'||type==='number')result[key]=null;else if(type&&resources[type]){if(required)throw Error(`${key} is required.`);}else result[key]='';continue;}
     if(type&&resources[type]){if(!/^\d+$/.test(raw)||Number(raw)<1)throw Error(`Choose a valid ${key}.`);result[key]=Number(raw);}
     else if(type==='json'||type==='geo'){
       try{result[key]=JSON.parse(raw);}catch{throw Error(`${key} must contain valid JSON.`);}
@@ -27,6 +27,12 @@ export function parseRecordForm(resource, form, department, editing=false){
         const error=geometryError(g);if(error)throw Error(error);
       }
       if(key==='external_identifiers'&&!Array.isArray(result[key]))throw Error('External identifiers must be an array.');
+      if(key==='communication_parameters'&&(typeof result[key]!=='object'||Array.isArray(result[key])))throw Error('Communication parameters must be a JSON object.');
+    }else if(type==='number'){
+      const number=Number(raw.replace(',','.'));
+      if(!Number.isFinite(number))throw Error(`${key} must be a number.`);
+      if(key==='elevation'&&(number<-1000||number>10000))throw Error('elevation must be between -1000 and 10000 metres.');
+      result[key]=number;
     }else result[key]=raw;
   }
   if(!editing&&domainKeys.includes(resource)){

@@ -56,3 +56,27 @@ it('maps actual Django GeoJSON and identifiers without changing record identitie
  expect(records['physical-devices'][0]).toMatchObject({id:1,latitude:35,longitude:33,type:'Meter'});
  expect(records['network-elements'][0]).toMatchObject({id:1,geometryType:'LineString',externalId:'ERP: node'});
 });
+
+describe('client metadata fields',()=>{
+  const element={name:'Inlet',element_type:'1'};
+  it('sends network area, elevation and address for a network element',()=>{
+    const dto=parseRecordForm('network-elements',{...element,network_area:'Zone 1',elevation:'120,5',address:'1 Main St'},'2');
+    expect(dto).toMatchObject({network_area:'Zone 1',elevation:120.5,address:'1 Main St'});
+  });
+  it('sends a blank elevation as null so it can be cleared',()=>{
+    expect(parseRecordForm('network-elements',{...element,elevation:''},'2',true).elevation).toBeNull();
+  });
+  it('rejects an elevation that is not a number or is out of range',()=>{
+    expect(()=>parseRecordForm('network-elements',{...element,elevation:'high'},'2')).toThrow(/number/);
+    expect(()=>parseRecordForm('network-elements',{...element,elevation:'99999'},'2')).toThrow(/between/);
+  });
+  it('sends communication parameters as a JSON object',()=>{
+    const dto=parseRecordForm('physical-devices',{name:'Logger',device_type:'1',communication_parameters:'{"ip":"10.0.0.1","port":502}'},'2');
+    expect(dto.communication_parameters).toEqual({ip:'10.0.0.1',port:502});
+  });
+  it('clears communication parameters when blank and rejects non-objects',()=>{
+    expect(parseRecordForm('physical-devices',{name:'Logger',device_type:'1',communication_parameters:''},'2',true).communication_parameters).toBeNull();
+    expect(()=>parseRecordForm('physical-devices',{name:'Logger',device_type:'1',communication_parameters:'[1]'},'2')).toThrow(/object/);
+    expect(()=>parseRecordForm('physical-devices',{name:'Logger',device_type:'1',communication_parameters:'{bad'},'2')).toThrow(/JSON/);
+  });
+});
