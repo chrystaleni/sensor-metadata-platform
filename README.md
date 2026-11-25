@@ -32,7 +32,7 @@ The system follows a three-tier modular monolith architecture: a React/Vite fron
 
 ## Development status
 
-The Django backend implements metadata management for Measurements, Physical Devices and Network Elements. Argyris's contribution includes shared controlled lists, PostGIS geometry, search and filtering, atomic Excel import and audited logical deletion. See the [backend handover](docs/development/argyris-backend.md) for setup, API examples, validation results and the shared security integration boundary. This local integration branch also incorporates the existing Organisation, session/role/membership and React implementations, scoped API keys and full Compose services. Read the [integration and validation guide](docs/development/phase3-integration.md) before starting. Full PostGIS/E2E validation of the combined branch remains required; historical passing results are not proof of this revision.
+The Django backend implements metadata management for Measurements, Physical Devices and Network Elements. Argyris's contribution includes shared controlled lists, PostGIS geometry, search and filtering, atomic Excel import and audited logical deletion. See the [backend handover](docs/development/argyris-backend.md) for setup, API examples, validation results and the shared security integration boundary. This local integration branch also incorporates the existing Organisation, session/role/membership and React implementations, scoped API keys and full Compose services. Read the [integration and validation guide](docs/development/phase3-integration.md) before starting. 
 
 ## Frontend development
 
