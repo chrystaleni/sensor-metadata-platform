@@ -16,7 +16,8 @@ from .permissions import managed_departments
 
 class APIKeySerializer(serializers.ModelSerializer):
     department = serializers.IntegerField(source="department_id", min_value=1, max_value=2**63 - 1)
-    expires_at = serializers.DateTimeField(default=lambda: timezone.now() + timedelta(days=90))
+    # Omitted: 90 days. null: never expires (Phase 2, 1.4.4: expiration is optional).
+    expires_at = serializers.DateTimeField(default=lambda: timezone.now() + timedelta(days=90), allow_null=True)
 
     class Meta:
         model = APIKey
@@ -24,7 +25,7 @@ class APIKeySerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "prefix", "created_at", "revoked_at")
 
     def validate_expires_at(self, value):
-        if value <= timezone.now():
+        if value is not None and value <= timezone.now():
             raise serializers.ValidationError("Expiration must be in the future.")
         return value
 
@@ -76,7 +77,7 @@ class APIKeyViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin,
         if not is_system_admin(request):
             raise PermissionDenied("System Administrator access is required.")
         key = self.get_object()
-        if key.revoked_at is None and key.expires_at > timezone.now():
+        if key.revoked_at is None and not key.is_expired():
             return Response({"detail": "Revoke the key before deleting it."}, status=status.HTTP_409_CONFLICT)
         key.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
