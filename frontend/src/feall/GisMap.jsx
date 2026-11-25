@@ -33,8 +33,8 @@ export default function GisMap({records}){
       const p=feature.properties;
       const color=!p.active?'#8997a6':p.kind==='Physical Device'?'#168b83':'#3979c7';
       const layer=L.geoJSON(feature,{
-        pointToLayer:(_,latlng)=>L.circleMarker(latlng,{radius:9,color:'#fff',weight:2,fillColor:color,fillOpacity:0.95}),
-        style:{color,weight:4,fillColor:color,fillOpacity:0.25}
+        pointToLayer:(_,latlng)=>L.circleMarker(latlng,{radius:8,stroke:false,fillColor:color,fillOpacity:0.55}),
+        style:(f)=>f.geometry.type==='Point'?{stroke:false,fillColor:color,fillOpacity:0.6}:{color,weight:4,fillColor:color,fillOpacity:0.25}
       });
       layer.on('click',()=>setSelected(featureKey(feature)));
       const tooltipText=document.createTextNode(`${p.name} · ${p.kind}`);

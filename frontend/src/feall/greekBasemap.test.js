@@ -1,4 +1,7 @@
 import {describe,it,expect,vi,afterEach} from 'vitest';
+import {readFileSync} from 'node:fs';
+import {dirname,resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
 
 vi.mock('@maplibre/maplibre-gl-leaflet',()=>({
   maplibreGL:vi.fn()
@@ -8,7 +11,7 @@ vi.mock('maplibre-gl',()=>({
   setWorkerUrl:vi.fn()
 }));
 
-import {loadGreekMapStyle} from './greekBasemap';
+import {loadGreekMapStyle,addGreekBasemap} from './greekBasemap';
 
 afterEach(()=>vi.unstubAllGlobals());
 
@@ -70,5 +73,44 @@ describe('Greek basemap',()=>{
 
     await expect(loadGreekMapStyle())
       .rejects.toThrow('Unable to load map style');
+  });
+});
+
+describe('addGreekBasemap',()=>{
+  it('keeps the map sized to its container',async()=>{
+    const {maplibreGL}=await import('@maplibre/maplibre-gl-leaflet');
+    maplibreGL.mockReturnValue({addTo:()=>({})});
+    let callback;
+    const observe=vi.fn();
+    const disconnect=vi.fn();
+    vi.stubGlobal('ResizeObserver',class{constructor(cb){callback=cb}observe=observe;disconnect=disconnect});
+    const handlers={};
+    const map={
+      _loaded:true,
+      getContainer:()=>({}),
+      invalidateSize:vi.fn(),
+      on:vi.fn((name,fn)=>{handlers[name]=fn})
+    };
+
+    addGreekBasemap(map,{});
+    expect(observe).toHaveBeenCalled();
+
+    callback();
+    expect(map.invalidateSize).toHaveBeenCalled();
+
+    handlers.unload();
+    expect(disconnect).toHaveBeenCalled();
+  });
+});
+
+describe('map worker deployment',()=>{
+  // MapLibre starts its worker from an ES module (.mjs). Browsers refuse a
+  // module that is not served as JavaScript and nginx has no default type
+  // for .mjs, which left the basemap blank in the Docker deployment.
+  it('serves .mjs files as JavaScript in the nginx configuration',()=>{
+    const here=dirname(fileURLToPath(import.meta.url));
+    const config=readFileSync(resolve(here,'../../../docker/nginx.conf'),'utf8');
+
+    expect(config).toMatch(/location\s+~\*?\s+\\\.mjs\$\s*\{[^}]*default_type\s+(text|application)\/javascript\s*;/);
   });
 });
