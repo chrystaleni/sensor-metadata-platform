@@ -1,10 +1,6 @@
 import {render,screen,fireEvent,waitFor} from '@testing-library/react';
 import {describe,it,expect,vi} from 'vitest';
 const mocks=vi.hoisted(()=>({fit:vi.fn(),view:vi.fn()}));
-vi.mock('./greekBasemap',()=>({
- loadGreekMapStyle:async()=>({version:8,sources:{},layers:[]}),
- addMapControls:vi.fn()
-}));
 vi.mock('./mapUtils',async importOriginal=>{
  const actual=await importOriginal();
  const bounds=name=>({name,isValid:()=>true,pad(){return this}});
@@ -37,7 +33,7 @@ describe('GIS resource identities',()=>{
   await waitFor(()=>expect(mocks.fit).toHaveBeenCalled());
   mocks.view.mockClear();
   rerender(<GisMap records={{'physical-devices':[],'network-elements':[]}}/>);
-  await waitFor(()=>expect(mocks.fit).toHaveBeenLastCalledWith([[34.55,32.25],[35.72,34.62]],{animate:false}));
+  await waitFor(()=>expect(mocks.view).toHaveBeenCalledWith([35.14,33.39],10,{animate:false}));
  });
  it('zooms to and selects the record passed from "Show on map"',async()=>{
   mocks.fit.mockClear();

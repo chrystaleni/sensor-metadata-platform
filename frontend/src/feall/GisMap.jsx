@@ -1,11 +1,10 @@
-import {loadGreekMapStyle,addMapControls} from './greekBasemap';
 import {useEffect,useMemo,useRef,useState} from 'react';
 import './gis.css';
 
 import {loadLeaflet,buildMapFeatures,featureKey} from './mapUtils';
 
 // Default view: the whole of Cyprus, fitted to the size of the map.
-const CYPRUS_BOUNDS=[[34.55,32.25],[35.72,34.62]];
+const DEFAULT_VIEW={center:[35.14,33.39],zoom:10};
 // focusKey ("Network Element:7") selects and zooms to one record, e.g. from "Show on map" in record details.
 export default function GisMap({records,focusKey=null}){
   const mapElement=useRef(null),mapRef=useRef(null),layerRef=useRef(null),featureLayers=useRef({});
@@ -22,12 +21,12 @@ export default function GisMap({records,focusKey=null}){
   });
   useEffect(()=>{
     let active=true;
-    // A style that cannot be loaded is not fatal: the map falls back to plain OpenStreetMap tiles.
-    Promise.all([loadLeaflet(),loadGreekMapStyle().catch(()=>null)]).then(([L,style])=>{
+    loadLeaflet().then(L=>{
       if(!active||!mapElement.current)return;
-      const map=L.map(mapElement.current,{scrollWheelZoom:false,minZoom:1,maxZoom:19});map.fitBounds(CYPRUS_BOUNDS);
-      addMapControls(map,style,L);
-      map.attributionControl.addAttribution('© OpenStreetMap contributors | OpenFreeMap');
+      const map=L.map(mapElement.current,{scrollWheelZoom:false}).setView(DEFAULT_VIEW.center,DEFAULT_VIEW.zoom);
+      // OpenStreetMap tiles. Its tile policy blocks requests without a Referer, and the app sends
+      // Referrer-Policy: same-origin, so this layer sends the site's origin.
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19,referrerPolicy:'strict-origin-when-cross-origin'}).addTo(map);
       mapRef.current=map;layerRef.current=L.featureGroup().addTo(map);setReady(true);
       requestAnimationFrame(()=>map.invalidateSize());
     }).catch(e=>active&&setError(e.message));
@@ -52,7 +51,7 @@ export default function GisMap({records,focusKey=null}){
     if(target&&target.getBounds().isValid()){focused.current=focusKey;mapRef.current.fitBounds(target.getBounds().pad(0.8),{maxZoom:15,animate:false});}
     else if(group.getLayers().length&&group.getBounds().isValid())mapRef.current.fitBounds(group.getBounds().pad(0.25),{maxZoom:15,animate:false});
     // Nothing to show (e.g. an empty Department): go back to the default view instead of keeping the previous area.
-    else mapRef.current.fitBounds(CYPRUS_BOUNDS,{animate:false});
+    else mapRef.current.setView(DEFAULT_VIEW.center,DEFAULT_VIEW.zoom,{animate:false});
     mapRef.current.invalidateSize();
   },[ready,visible,focusKey]);
   const current=visible.find(f=>featureKey(f)===selected);
