@@ -110,18 +110,19 @@ describe('addGreekBasemap',()=>{
     expect(disconnect).toHaveBeenCalled();
   });
 
-  it('uses plain OpenStreetMap tiles when the browser has no WebGL',async()=>{
+  it('uses label-free tiles when the browser has no WebGL',async()=>{
     const {maplibreGL}=await import('@maplibre/maplibre-gl-leaflet');maplibreGL.mockClear();
     withWebGL(false);const {L,raster}=leaflet();const map=plainMap();
     addGreekBasemap(map,{},L);
     expect(maplibreGL).not.toHaveBeenCalled();
-    expect(L.tileLayer.mock.calls[0][0]).toBe('https://tile.openstreetmap.org/{z}/{x}/{y}.png');
-    // Without a Referer, OpenStreetMap answers "Access blocked" (tile usage policy).
+    // Label-free tiles: standard OpenStreetMap tiles would show Turkish names in the north of Cyprus.
+    expect(L.tileLayer.mock.calls[0][0]).toContain('World_Light_Gray_Base');
+    // Tile servers may refuse requests without a Referer.
     expect(L.tileLayer.mock.calls[0][1].referrerPolicy).toBe('strict-origin-when-cross-origin');
     expect(raster.addTo).toHaveBeenCalledWith(map);
   });
 
-  it('uses plain OpenStreetMap tiles when the map style could not be loaded',()=>{
+  it('uses label-free tiles when the map style could not be loaded',()=>{
     withWebGL(true);const {L}=leaflet();
     addGreekBasemap(plainMap(),null,L);
     expect(L.tileLayer).toHaveBeenCalled();

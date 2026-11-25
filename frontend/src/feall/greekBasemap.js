@@ -63,7 +63,9 @@ export async function loadGreekMapStyle() {
   return style;
 }
 
-const RASTER_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+// Label-free fallback tiles. Standard OpenStreetMap tiles show local names, which are Turkish in the
+// north of Cyprus; the platform's map must show Greek names only (the vector map) or no names at all.
+const RASTER_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}';
 const VECTOR_TIMEOUT_MS = 10000;
 
 export function supportsWebGL() {
@@ -75,21 +77,21 @@ export function supportsWebGL() {
   }
 }
 
-// Plain OpenStreetMap image tiles: no WebGL, no web worker, no style file.
+// Plain image tiles without place names: no WebGL, no web worker, no style file.
 export function addRasterBasemap(map, L) {
-  // OpenStreetMap's tile usage policy blocks requests without a Referer. The app sends
-  // Referrer-Policy: same-origin, so this layer asks the browser to send its origin (only the
-  // origin, never the page path) to the tile server.
+  // Tile servers may refuse requests without a Referer. The app sends Referrer-Policy: same-origin,
+  // so this layer asks the browser to send its origin (never the page path) to the tile server.
   return L.tileLayer(RASTER_URL, {
     maxZoom: 19,
-    attribution: '© OpenStreetMap contributors',
+    maxNativeZoom: 16,
+    attribution: 'Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap contributors',
     referrerPolicy: 'strict-origin-when-cross-origin'
   }).addTo(map);
 }
 
 // The Greek vector basemap needs WebGL, a module web worker and tiles.openfreemap.org. When any of these is
 // missing (graphics acceleration off, older browser, blocked network) it only paints its beige background,
-// so fall back to plain OpenStreetMap tiles instead of leaving an empty map.
+// so fall back to plain, label-free tiles instead of leaving an empty map.
 export function addGreekBasemap(map, style, L = globalThis.L, { timeout = VECTOR_TIMEOUT_MS } = {}) {
   if (!style || !supportsWebGL()) {
     return addRasterBasemap(map, L);
