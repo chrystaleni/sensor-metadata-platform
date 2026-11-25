@@ -66,3 +66,43 @@ it('hides archived records from Viewers and Editors',async()=>{
   cleanup();window.location.hash='';
  }
 });
+
+function listsApp(role){
+ const calls=[];
+ vi.stubGlobal('fetch',vi.fn(async(raw,init={})=>{
+  const url=new URL(raw);calls.push({path:url.pathname,method:init.method||'GET'});let data;
+  const admin=['DEPARTMENT_ADMIN','SYSTEM_ADMIN'].includes(role);
+  if(url.pathname.endsWith('/auth/session/'))data={authenticated:true};
+  else if(url.pathname.endsWith('/auth/context/'))data={authenticated:true,role,departments:[{id:7,name:'North',organisation:'Water',writable:role!=='VIEWER'}],permissions:{manage_catalogs:admin,manage_api_keys:false}};
+  else if(url.pathname.endsWith('/measurement-types/'))data={count:2,results:[{id:1,name:'Flow',is_active:true},{id:2,name:'Old type',is_active:false}].filter(r=>r.is_active||url.searchParams.get('include_archived'))};
+  else if(init.method==='DELETE')return {ok:true,status:204,json:async()=>null};
+  else data={count:0,results:[]};
+  return {ok:true,status:200,json:async()=>data};
+ }));
+ return calls;
+}
+async function openLists(){render(<App/>);await screen.findByRole('button',{name:'Profile menu'});fireEvent.click(screen.getByRole('link',{name:'Controlled Lists',exact:true}));}
+it('lets Department and System Administrators add, edit and delete shared list entries',async()=>{
+ for(const role of ['DEPARTMENT_ADMIN','SYSTEM_ADMIN']){
+  const calls=listsApp(role);vi.stubGlobal('confirm',()=>true);
+  await openLists();
+  const live=(await screen.findAllByText('Flow'))[0].closest('tr');
+  expect(live).toHaveTextContent('Archive');
+  expect(live).toHaveTextContent('Edit');expect(screen.getAllByRole('button',{name:/^\+ Add/}).length).toBeGreaterThan(0);
+  const archived=(await screen.findAllByText('Old type'))[0].closest('tr');
+  expect(archived).toHaveClass('all-archived');expect(archived).toHaveTextContent('Restore');expect(archived).toHaveTextContent('Delete');
+  fireEvent.click(live.querySelector('button:last-of-type'));
+  await waitFor(()=>expect(calls.some(c=>c.path.endsWith('/measurement-types/1/')&&c.method==='DELETE')).toBe(true));
+  cleanup();window.location.hash='';
+ }
+});
+it('shows shared lists read-only to Viewers and Editors',async()=>{
+ for(const role of ['VIEWER','EDITOR']){
+  listsApp(role);
+  await openLists();
+  const live=(await screen.findAllByText('Flow'))[0].closest('tr');
+  expect(live).not.toHaveTextContent('Archive');expect(live).not.toHaveTextContent('Edit');
+  expect(screen.queryByText('Old type')).not.toBeInTheDocument();expect(screen.queryByRole('button',{name:/^\+ Add/})).not.toBeInTheDocument();
+  cleanup();window.location.hash='';
+ }
+});

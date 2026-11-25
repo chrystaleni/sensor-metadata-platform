@@ -6,7 +6,7 @@ from .models import UserRole, UserDepartment
 
 pytestmark=pytest.mark.django_db
 
-@pytest.mark.parametrize('role,writable,manage', [('VIEWER',False,False),('EDITOR',True,False),('DEPARTMENT_ADMIN',True,False),('SYSTEM_ADMIN',True,True)])
+@pytest.mark.parametrize('role,writable,manage', [('VIEWER',False,False),('EDITOR',True,False),('DEPARTMENT_ADMIN',True,True),('SYSTEM_ADMIN',True,True)])
 def test_context_is_membership_and_role_scoped(settings,role,writable,manage):
  settings.METADATA_ACCESS_POLICY='platform_security.access.DepartmentAccessPolicy'
  create_catalog()
