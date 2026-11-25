@@ -30,10 +30,12 @@ Totals, breakdowns by type, how many records have a map position, and the most r
 Each page lists the records of the selected Department.
 
 - **Search** looks in names, descriptions and linked fields (for example a measurement's device or type, a network element's identifiers or DMA/Strategic model IDs). **Sort by** orders the list.
-- **View** shows every field of a record.
+- **Filters** narrow the list by related records: Measurements by physical device, network element, measurement type and unit; Physical Devices by device type; Network Elements by element type. **Clear filters** resets them.
+- **View** shows every field of a record. For a device or network element with a location, **Show on map** opens the GIS Map zoomed to it.
 - **+ Add** and **Edit** open a form. Fields marked `*` are required. A measurement must have a physical device, a network element, a measurement type and a unit.
   - Locations and geometries are GeoJSON in WGS84, longitude first, for example `{"type":"Point","coordinates":[33.36,35.15]}`. Network elements may also be `LineString` or `Polygon`.
   - *Communication parameters* and *Collection config* are JSON objects, for example `{"IP":"10.0.0.1"}`.
+  - If a value is not accepted, the field is outlined in red with the reason underneath. Correct it and press **Save** again.
 - **Archive** hides a record without deleting it. A record that other active records still use cannot be archived; archive those first (for example the measurements of a device).
 
 **Archived records (Department and System Administrators):** archived records appear in the lists as faded rows with the status **Archived** and two actions:
@@ -41,16 +43,16 @@ Each page lists the records of the selected Department.
 - **Delete** removes it permanently. Only archived records that nothing else uses can be deleted, and this cannot be undone.
 
 ### GIS Map
-Shows the physical devices and network elements of the selected Department that have a location. Click a record in the list to zoom to it. **Show** limits the map to one kind, and **Include inactive** adds archived records. Records without a valid location are listed under the map. The basemap needs an internet connection.
+Shows the physical devices and network elements of the selected Department that have a location. Click a record in the list to zoom to it. **Search** filters the records by name, identifier or type. **Show** limits the map to one kind, and **Include inactive** adds archived records. Records without a valid location are listed under the map. The basemap needs an internet connection.
 
 ### Controlled Lists
-The shared lists used by every Department: measurement types, measurement units, device types and network element types. Everyone can view them. Department and System Administrators can add, edit, archive, restore and delete entries. An entry that records still use cannot be archived or deleted.
+The shared lists used by every Department: measurement types, measurement units, device types and network element types. Everyone can view them. Department and System Administrators can add, edit, archive, restore and delete entries. An entry that records still use cannot be archived or deleted. Records that use an archived entry keep showing its name, marked *(archived)*; it can no longer be chosen for new records.
 
 ### Excel Import / Export
 **Import** (Editors and above) adds many records at once to the selected Department. The page shows which Department will receive them. Two workbook layouts are accepted:
 
 1. **The client layout**, with sheets `Measurements`, `NetworkElements` and `Physical_devices` and the client's column names (`MeasurementId`, `NetworkElementId`, `Device_id`, …). Types and units are given by name. A name that is missing from the shared lists is added automatically when a Department or System Administrator imports; otherwise the row is rejected. If the `Department` column names a different existing Department than the selected one, the import is refused, so records cannot land in the wrong Department.
-2. **The platform template**, with sheets `Physical Devices`, `Network Elements` and `Measurements`. Generate it with `python manage.py metadata_workbook template.xlsx`.
+2. **The platform template**, with sheets `Physical Devices`, `Network Elements` and `Measurements`. Get it with **Download template**; required columns are bold.
 
 An import is all-or-nothing. If any row is invalid, nothing is saved and every problem is listed with its sheet, row and column. Importing the same workbook twice is refused because its identifiers already exist.
 
@@ -59,10 +61,10 @@ An import is all-or-nothing. If any row is invalid, nothing is saved and every p
 - **Export a single table** saves one list (XLSX or CSV) with all its API fields, for reading only.
 
 ### API Keys (Department and System Administrators)
-Creates read-only keys that let an external system read one Department. Each key is shown **only once** when it is created, so copy it then. **Revoke** stops a key immediately. System Administrators can **Delete** keys that are revoked or expired. See [Using an API key](#using-an-api-key).
+Creates read-only keys that let an external system read one Department. Each key is shown **only once** when it is created, so copy it then. By default a key expires after 90 days; choose another date, or **No expiration** for a key that works until it is revoked. **Revoke** stops a key immediately, including an expired one. System Administrators can **Delete** keys that are revoked or expired. See [Using an API key](#using-an-api-key).
 
 ### Administration (Department and System Administrators)
-Create users, choose their role and Departments, **Deactivate** users who should no longer sign in, and (System Administrators) **Reset password**, **Reactivate** or **Delete** users. Department Administrators manage only Viewers and Editors of their own Departments. A deleted user's records stay, without their name.
+Create users, change their role and Departments with **Edit**, **Deactivate** users who should no longer sign in, and (System Administrators) **Reset password**, **Reactivate** or **Delete** users. Department Administrators manage only Viewers and Editors of their own Departments. A deleted user's records stay, without their name.
 
 ### Settings
 Your account and role, **Change password**, your **default Department** (stored in this browser), and **Log out**. Department Administrators also see their Departments. System Administrators also manage **Organisations and Departments**: add them, and delete empty ones. Platform can never be deleted.
