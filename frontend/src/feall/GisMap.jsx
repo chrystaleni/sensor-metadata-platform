@@ -4,6 +4,8 @@ import './gis.css';
 
 import {loadLeaflet,buildMapFeatures,featureKey} from './mapUtils';
 
+// Default view: Cyprus around Nicosia.
+const DEFAULT_VIEW={center:[35.14,33.39],zoom:10};
 export default function GisMap({records}){
   const mapElement=useRef(null),mapRef=useRef(null),layerRef=useRef(null),featureLayers=useRef({});
   const [selected,setSelected]=useState(null),[error,setError]=useState(''),[ready,setReady]=useState(false);
@@ -18,7 +20,7 @@ export default function GisMap({records}){
     let active=true;
     Promise.all([loadLeaflet(),loadGreekMapStyle()]).then(([L,style])=>{
       if(!active||!mapElement.current)return;
-      const map=L.map(mapElement.current,{scrollWheelZoom:false,minZoom:1,maxZoom:19}).setView([35.14,33.39],10);
+      const map=L.map(mapElement.current,{scrollWheelZoom:false,minZoom:1,maxZoom:19}).setView(DEFAULT_VIEW.center,DEFAULT_VIEW.zoom);
       addGreekBasemap(map,style);
       map.attributionControl.addAttribution('© OpenStreetMap contributors | OpenFreeMap');
       mapRef.current=map;layerRef.current=L.featureGroup().addTo(map);setReady(true);
@@ -42,6 +44,8 @@ export default function GisMap({records}){
       layer.addTo(group);featureLayers.current[featureKey(feature)]=layer;
     }
     if(group.getLayers().length&&group.getBounds().isValid())mapRef.current.fitBounds(group.getBounds().pad(0.25),{maxZoom:15,animate:false});
+    // Nothing to show (e.g. an empty Department): go back to the default view instead of keeping the previous area.
+    else mapRef.current.setView(DEFAULT_VIEW.center,DEFAULT_VIEW.zoom,{animate:false});
     mapRef.current.invalidateSize();
   },[ready,visible]);
   const current=visible.find(f=>featureKey(f)===selected);
