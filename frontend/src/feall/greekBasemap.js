@@ -64,8 +64,25 @@ export async function loadGreekMapStyle() {
 }
 
 export function addGreekBasemap(map, style) {
-  return maplibreGL({
+  const layer = maplibreGL({
     style,
     attributionControl: false
   }).addTo(map);
+
+  // Keep the map matched to its container, not only to the browser window
+  // (for example when the layout around the map changes).
+  const container = map.getContainer();
+
+  if (typeof ResizeObserver !== 'undefined' && container) {
+    const observer = new ResizeObserver(() => {
+      if (map._loaded) {
+        map.invalidateSize();
+      }
+    });
+
+    observer.observe(container);
+    map.on('unload', () => observer.disconnect());
+  }
+
+  return layer;
 }
