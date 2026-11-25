@@ -40,3 +40,13 @@ it('remembers the default Department in this browser',()=>{
  fireEvent.change(screen.getByLabelText('Default Department'),{target:{value:'7'}});
  expect(localStorage.getItem('sensor.defaultDepartment')).toBe('7');expect(onDepartment).toHaveBeenCalledWith('7');
 });
+
+it('lets every role log out from Settings',()=>{
+ for(const role of ['VIEWER','EDITOR','DEPARTMENT_ADMIN','SYSTEM_ADMIN']){
+  const onLogout=vi.fn(async()=>{});
+  render(<Settings session={mk(role)} api={api} department="7" onDepartment={()=>{}} pickable={deps} onLogout={onLogout}/>);
+  fireEvent.click(screen.getByRole('button',{name:'Log out'}));
+  expect(onLogout).toHaveBeenCalledTimes(1);
+  cleanup();
+ }
+});
