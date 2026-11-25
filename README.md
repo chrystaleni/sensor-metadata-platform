@@ -34,6 +34,42 @@ The system follows a three-tier modular monolith architecture: a React/Vite fron
 
 The Django backend implements metadata management for Measurements, Physical Devices and Network Elements. Argyris's contribution includes shared controlled lists, PostGIS geometry, search and filtering, atomic Excel import and audited logical deletion. See the [backend handover](docs/development/argyris-backend.md) for setup, API examples, validation results and the shared security integration boundary. This local integration branch also incorporates the existing Organisation, session/role/membership and React implementations, scoped API keys and full Compose services. Read the [integration and validation guide](docs/development/phase3-integration.md) before starting. Full PostGIS/E2E validation of the combined branch remains required; historical passing results are not proof of this revision.
 
+## Quick start (run locally with Docker)
+
+Requirements: [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Docker Engine with Compose) and Git. Nothing else needs to be installed.
+
+```sh
+git clone https://github.com/chrystaleni/sensor-metadata-platform.git
+cd sensor-metadata-platform
+cp .env.example .env
+```
+
+Edit `.env` and set your own `POSTGRES_PASSWORD` and a unique `DJANGO_SECRET_KEY` (the backend refuses the insecure example value). Also add:
+
+```dotenv
+METADATA_ACCESS_POLICY=platform_security.access.DepartmentAccessPolicy
+```
+
+Build, create the database and the shared Platform Department:
+
+```sh
+docker compose build
+docker compose up -d db
+docker compose run --rm backend python manage.py migrate --noinput
+docker compose run --rm backend python manage.py provision_platform_department
+```
+
+Copy the Department ID printed by the last command into `.env` as `METADATA_PLATFORM_DEPARTMENT_ID=<id>`, then create your first System Administrator (you will be asked for a password) and start the application:
+
+```sh
+docker compose run --rm backend python manage.py configure_platform_user admin --create --role SYSTEM_ADMIN
+docker compose up -d backend frontend
+```
+
+Open <http://localhost:8080> and sign in. More users can then be created in **Administration**.
+
+Useful commands: `docker compose logs -f backend` to see logs, `docker compose stop` to pause, and `docker compose up -d backend frontend` to start again. `docker compose down` keeps your data; `docker compose down --volumes` deletes it. The map needs an internet connection for its basemap tiles. See the [integration guide](docs/development/phase3-integration.md) for details.
+
 ## Frontend development
 
 Run these commands from the `frontend/` directory. Install dependencies and start the development server:
