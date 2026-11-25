@@ -22,10 +22,11 @@ export default function GisMap({records,focusKey=null}){
   });
   useEffect(()=>{
     let active=true;
-    Promise.all([loadLeaflet(),loadGreekMapStyle()]).then(([L,style])=>{
+    // A style that cannot be loaded is not fatal: the map falls back to plain OpenStreetMap tiles.
+    Promise.all([loadLeaflet(),loadGreekMapStyle().catch(()=>null)]).then(([L,style])=>{
       if(!active||!mapElement.current)return;
       const map=L.map(mapElement.current,{scrollWheelZoom:false,minZoom:1,maxZoom:19}).setView(DEFAULT_VIEW.center,DEFAULT_VIEW.zoom);
-      addGreekBasemap(map,style);
+      addGreekBasemap(map,style,L);
       map.attributionControl.addAttribution('© OpenStreetMap contributors | OpenFreeMap');
       mapRef.current=map;layerRef.current=L.featureGroup().addTo(map);setReady(true);
       requestAnimationFrame(()=>map.invalidateSize());
