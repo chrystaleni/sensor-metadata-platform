@@ -162,6 +162,17 @@ Useful commands: `docker compose logs -f backend` to see logs, `docker compose s
 - [API guide](docs/development/argyris-api-examples.md) and interactive OpenAPI documentation at `/api/v1/docs/` (after sign-in).
 - [Integration and validation guide](docs/development/phase3-integration.md).
 
+## Demo Data
+
+The platform includes a Django management command for generating
+demonstration data to support testing and application demonstrations.
+
+After completing the initial setup, run:
+
+```sh
+docker compose run --rm backend python manage.py seed_demo_data
+```
+
 ## Continuous integration
 
 GitHub Actions runs automated checks on every branch push, on pull requests targeting `main`, and when manually started with `workflow_dispatch`. The backend job installs `backend/requirements.txt`, runs Django's system check, applies migrations, checks for missing migrations and runs pytest. The frontend job installs from `frontend/package-lock.json`, then runs the test suite, ESLint, and a production build. Team members can view workflow runs in the repository's **Actions** tab or check results on a pull request.
