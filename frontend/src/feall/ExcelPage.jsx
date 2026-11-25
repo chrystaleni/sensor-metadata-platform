@@ -10,6 +10,9 @@ export default function ExcelPage({department,departmentName,canWrite=true,onImp
  // Confirmed metadata import contract: POST /api/v1/imports/excel/.
  const endpoint=import.meta.env.VITE_EXCEL_IMPORT_URL||`${(import.meta.env.VITE_API_BASE_URL||'/api/v1').replace(/\/+$/,'')}/imports/excel/`;
  const configured=true;
+ const templateUrl=`${endpoint.replace(/\/+$/,'')}/template/`;
+ const [templateError,setTemplateError]=useState('');
+ async function downloadTemplate(){setTemplateError('');try{const response=await fetch(templateUrl,{credentials:'include'});if(!response.ok)throw Error(`Template download failed (HTTP ${response.status}).`);const url=URL.createObjectURL(await response.blob());const a=document.createElement('a');a.href=url;a.download='metadata-import-template.xlsx';a.click();URL.revokeObjectURL(url)}catch(e){setTemplateError(e.message||'Cannot download the template.')}}
  const choose=e=>{
   const selected=e.target.files?.[0]||null;
   setFile(selected);setError(selected&&!/\.xlsx$/i.test(selected.name)?'Choose an .xlsx Excel workbook.':'');
@@ -41,6 +44,8 @@ export default function ExcelPage({department,departmentName,canWrite=true,onImp
    {!canWrite&&<p role="status">Import requires write permission for the selected Department.</p>}
    {departmentName&&<p role="note" className="all-import-target">Records will be imported into <strong>{departmentName}</strong> (Department ID {departmentId}). To import into another Department, switch it from the profile menu first.</p>}
    <label>Department ID <input readOnly={department!==undefined} type="number" min="1" step="1" value={departmentId} onChange={e=>setDepartmentId(e.target.value)} disabled={!configured||!canWrite||state==='loading'}/></label>
+   <p>Fill in the platform template (required columns are bold), or upload a workbook in the client layout (Measurements, NetworkElements, Physical_devices). <button type="button" className="all-secondary" onClick={downloadTemplate}>Download template</button></p>
+   {templateError&&<p role="alert">{templateError}</p>}
    <label className="all-upload">Select Excel workbook (.xlsx)
     <input ref={fileInput} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={choose} disabled={!configured||!canWrite||state==='loading'}/>
    </label>

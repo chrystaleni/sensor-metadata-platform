@@ -28,3 +28,14 @@ it('names the Department the workbook will be imported into',()=>{
  vi.stubGlobal('fetch',vi.fn());render(<ExcelPage department="2" departmentName="Nicosia"/>);
  expect(screen.getByRole('note')).toHaveTextContent('Records will be imported into Nicosia (Department ID 2)');
 });
+
+it('downloads the import template',async()=>{
+ const fetch=vi.fn(async()=>({ok:true,status:200,blob:async()=>new Blob(['x'])}));vi.stubGlobal('fetch',fetch);
+ const created=vi.fn(()=>'blob:template');URL.createObjectURL=created;URL.revokeObjectURL=vi.fn();
+ const click=vi.spyOn(HTMLAnchorElement.prototype,'click').mockImplementation(()=>{});
+ render(<ExcelPage department="7"/>);
+ fireEvent.click(screen.getByRole('button',{name:'Download template'}));
+ await vi.waitFor(()=>expect(click).toHaveBeenCalled());
+ expect(fetch.mock.calls[0][0]).toMatch(/\/imports\/excel\/template\/$/);
+ click.mockRestore();
+});

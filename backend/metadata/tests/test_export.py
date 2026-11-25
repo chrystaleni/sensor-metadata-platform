@@ -119,3 +119,23 @@ class ClientDepartmentColumnTests(ClientLayoutExportTests):
     def test_unknown_department_labels_stay_informational(self):
         # The sample workbook says "Limassol", which is not a Department here.
         self.assertEqual(self.upload(CLIENT_SAMPLE.read_bytes(), 3).status_code, 201)
+
+
+@override_settings(METADATA_ACCESS_POLICY="metadata.tests.test_export.ExportPolicy", METADATA_PLATFORM_DEPARTMENT_ID=1)
+class ImportTemplateTests(APITestCase):
+    def test_signed_in_users_download_the_import_template(self):
+        from ..imports import SHEETS
+
+        self.client.force_authenticate(get_user_model().objects.create_user(username="anyone"))
+        response = self.client.get(f"{API}imports/excel/template/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('filename="metadata-import-template.xlsx"', response["Content-Disposition"])
+        workbook = load_workbook(BytesIO(response.content))
+        self.assertEqual(workbook.sheetnames, list(SHEETS))
+        for name, spec in SHEETS.items():
+            rows = list(workbook[name].iter_rows(values_only=True))
+            self.assertEqual(rows, [(*spec.required, *spec.optional)])
+            self.assertTrue(all(cell.font.b for cell in workbook[name][1][:len(spec.required)]))
+
+    def test_template_requires_sign_in(self):
+        self.assertIn(self.client.get(f"{API}imports/excel/template/").status_code, (401, 403))
