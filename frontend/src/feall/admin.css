@@ -15,7 +15,7 @@
 .adm-table{width:100%;border-collapse:collapse;font-size:13px}.adm-table th{text-align:left;padding:11px 22px;background:#fafbfc;color:#8794a2;font-size:10px;letter-spacing:.8px;text-transform:uppercase;border-bottom:1px solid #edf0f3}
 .adm-table td{padding:13px 22px;border-bottom:1px solid #f0f3f6;color:#2d3b4d;vertical-align:middle}.adm-table tr:last-child td{border-bottom:0}.adm-table td.actions{text-align:right;white-space:nowrap}
 .adm-mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#5b6b7e}
-.adm-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}.adm-badge.ok{background:#e3f6f2;color:#177a6c}.adm-badge.warn{background:#fff1d6;color:#9a6a08}.adm-badge.off{background:#eef1f4;color:#6b7888}
+.adm-badge{display:inline-block;white-space:nowrap;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}.adm-badge.ok{background:#e3f6f2;color:#177a6c}.adm-badge.warn{background:#fff1d6;color:#9a6a08}.adm-badge.off{background:#eef1f4;color:#6b7888}
 .adm-empty{padding:30px 22px;text-align:center;color:#8794a2;font-size:13px}
 @media(max-width:700px){.adm-table th:nth-child(2),.adm-table td:nth-child(2){display:none}}
 .adm-facts{margin:0;padding:6px 22px 16px;display:grid}.adm-facts div{display:grid;grid-template-columns:150px 1fr;gap:12px;padding:10px 0;border-bottom:1px solid #f0f3f6;font-size:13px}.adm-facts div:last-child{border-bottom:0}.adm-facts dt{color:#8794a2}.adm-facts dd{margin:0;color:#233143;font-weight:500}
