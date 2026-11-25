@@ -1,6 +1,7 @@
 from django.urls import path
 from rest_framework.routers import SimpleRouter
 
+from .exports import MetadataExportView
 from .imports import MetadataImportView
 from .views import (
     MeasurementTypeViewSet,
@@ -31,4 +32,5 @@ router.register("network-element-types", NetworkElementTypeViewSet, basename="ne
 urlpatterns = [
     *router.urls,
     path("imports/excel/", MetadataImportView.as_view(), name="metadata-excel-import"),
+    path("exports/excel/", MetadataExportView.as_view(), name="metadata-excel-export"),
 ]
