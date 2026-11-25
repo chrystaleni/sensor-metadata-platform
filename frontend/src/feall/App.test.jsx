@@ -148,3 +148,19 @@ it('keeps showing the name of an archived shared value that records still use',a
  expect([...typeSelect.options].map(o=>o.textContent)).not.toContain('Old meter (#12)');
  expect([...typeSelect.options].map(o=>o.textContent)).toContain('Logger (#11)');
 });
+
+it('opens the map at a record from its details',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async(raw)=>{
+  const url=new URL(raw);let data;
+  if(url.pathname.endsWith('/auth/session/'))data={authenticated:true};
+  else if(url.pathname.endsWith('/auth/context/'))data={authenticated:true,role:'VIEWER',departments:[{id:7,name:'North',organisation:'Water',writable:false}],permissions:{manage_catalogs:false,manage_api_keys:false}};
+  else if(url.pathname.endsWith('/network-elements/'))data={count:1,results:[{id:4,name:'Inlet 4',department:7,element_type:1,is_active:true,geometry:{type:'Point',coordinates:[33.38,35.17]}}]};
+  else data={count:0,results:[]};
+  return {ok:true,status:200,json:async()=>data};
+ }));
+ render(<App/>);await screen.findByRole('button',{name:'Profile menu'});
+ fireEvent.click(screen.getByRole('link',{name:'Network Elements',exact:true}));
+ fireEvent.click((await screen.findAllByRole('button',{name:'View'}))[0]);
+ fireEvent.click(screen.getByRole('button',{name:'Show on map'}));
+ await waitFor(()=>expect(window.location.hash).toBe('#/gis-map'));
+});
