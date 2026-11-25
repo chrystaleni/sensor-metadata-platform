@@ -24,3 +24,41 @@ it('shows nothing and sends no request without permission',()=>{
  const fetch=vi.fn();vi.stubGlobal('fetch',fetch);render(<UsersAdmin departments={depts} role="VIEWER" allowed={false}/>);
  expect(screen.queryByText('Create user')).not.toBeInTheDocument();expect(fetch).not.toHaveBeenCalled();
 });
+const people=[{id:1,username:'ann',role:'EDITOR',departments:[7],is_active:true},{id:9,username:'root',role:'SYSTEM_ADMIN',departments:[],is_active:true}];
+it('offers Reset password only to System Administrators and never for themselves',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async()=>({ok:true,status:200,json:async()=>people})));
+ const {unmount}=render(<UsersAdmin departments={depts} role="SYSTEM_ADMIN" currentUser="root" allowed/>);
+ expect(await screen.findByLabelText('Reset password for ann')).toBeInTheDocument();
+ expect(screen.queryByLabelText('Reset password for root')).not.toBeInTheDocument();
+ unmount();
+ render(<UsersAdmin departments={depts} role="DEPARTMENT_ADMIN" currentUser="boss" allowed/>);
+ await screen.findByText('ann');
+ expect(screen.queryByLabelText(/Reset password for/)).not.toBeInTheDocument();
+});
+it('asks for the administrator password, shows the new password once and then removes it',async()=>{
+ const calls=[];vi.stubGlobal('fetch',vi.fn(async(url,options={})=>{calls.push({url,options});
+  return {ok:true,status:200,json:async()=>options.method==='POST'?{id:1,username:'ann',password:'Fresh-Secret-123'}:people}}));
+ render(<UsersAdmin departments={depts} role="SYSTEM_ADMIN" currentUser="root" allowed/>);
+ fireEvent.click(await screen.findByLabelText('Reset password for ann'));
+ const dialog=screen.getByRole('dialog',{name:'Reset password for ann'});
+ expect(screen.queryByText('Fresh-Secret-123')).not.toBeInTheDocument();
+ fireEvent.change(screen.getByLabelText('Your password'),{target:{value:'my-own-passphrase'}});
+ fireEvent.submit(dialog.querySelector('form'));
+ expect(await screen.findByText('Fresh-Secret-123')).toBeInTheDocument();
+ const post=calls.find(c=>c.options.method==='POST');
+ expect(post.url).toContain('/users/1/reset-password/');expect(JSON.parse(post.options.body)).toEqual({current_password:'my-own-passphrase'});
+ fireEvent.click(screen.getByRole('button',{name:'Done'}));
+ expect(screen.queryByText('Fresh-Secret-123')).not.toBeInTheDocument();
+ expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+it('shows an error and no password when the administrator password is wrong',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async(url,options={})=>options.method==='POST'
+  ?{ok:false,status:400,json:async()=>({current_password:['Your password is incorrect.']})}
+  :{ok:true,status:200,json:async()=>people}));
+ render(<UsersAdmin departments={depts} role="SYSTEM_ADMIN" currentUser="root" allowed/>);
+ fireEvent.click(await screen.findByLabelText('Reset password for ann'));
+ fireEvent.change(screen.getByLabelText('Your password'),{target:{value:'wrong-wrong-wrong'}});
+ fireEvent.submit(screen.getByRole('dialog').querySelector('form'));
+ expect(await screen.findByRole('alert')).toHaveTextContent(/incorrect/i);
+ expect(screen.queryByLabelText('New password')).not.toBeInTheDocument();
+});
