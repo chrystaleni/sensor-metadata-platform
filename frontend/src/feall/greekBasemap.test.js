@@ -24,7 +24,7 @@ function mockStyle(layers){
 
 describe('Greek basemap',()=>{
 
-  it('uses Greek names without foreign language fallback',async()=>{
+  it('uses Greek names, then English, never the local name',async()=>{
     mockStyle([{
       id:'label_city',
       type:'symbol',
@@ -34,7 +34,7 @@ describe('Greek basemap',()=>{
     const style=await loadGreekMapStyle();
 
     expect(style.layers[0].layout['text-field'])
-      .toEqual(['coalesce',['get','name:el'],'']);
+      .toEqual(['coalesce',['get','name:el'],['get','name:en'],'']);
   });
 
   it('provides Greek country names using ISO codes',async()=>{
