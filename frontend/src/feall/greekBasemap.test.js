@@ -116,6 +116,8 @@ describe('addGreekBasemap',()=>{
     addGreekBasemap(map,{},L);
     expect(maplibreGL).not.toHaveBeenCalled();
     expect(L.tileLayer.mock.calls[0][0]).toBe('https://tile.openstreetmap.org/{z}/{x}/{y}.png');
+    // Without a Referer, OpenStreetMap answers "Access blocked" (tile usage policy).
+    expect(L.tileLayer.mock.calls[0][1].referrerPolicy).toBe('strict-origin-when-cross-origin');
     expect(raster.addTo).toHaveBeenCalledWith(map);
   });
 

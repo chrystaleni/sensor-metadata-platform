@@ -77,7 +77,14 @@ export function supportsWebGL() {
 
 // Plain OpenStreetMap image tiles: no WebGL, no web worker, no style file.
 export function addRasterBasemap(map, L) {
-  return L.tileLayer(RASTER_URL, { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(map);
+  // OpenStreetMap's tile usage policy blocks requests without a Referer. The app sends
+  // Referrer-Policy: same-origin, so this layer asks the browser to send its origin (only the
+  // origin, never the page path) to the tile server.
+  return L.tileLayer(RASTER_URL, {
+    maxZoom: 19,
+    attribution: '© OpenStreetMap contributors',
+    referrerPolicy: 'strict-origin-when-cross-origin'
+  }).addTo(map);
 }
 
 // The Greek vector basemap needs WebGL, a module web worker and tiles.openfreemap.org. When any of these is
