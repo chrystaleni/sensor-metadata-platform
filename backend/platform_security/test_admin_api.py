@@ -293,3 +293,76 @@ def test_form_fields_can_be_created_edited_and_cleared_through_the_api(world):
     assert device.data["communication_parameters"] == {"ip": "10.0.0.1", "port": 502}
     patched = client.patch(f"/api/v1/physical-devices/{device.data['id']}/", {"communication_parameters": None}, format="json")
     assert patched.status_code == 200 and patched.data["communication_parameters"] is None
+
+
+def reset_url(user):
+    return f"/api/v1/users/{user.pk}/reset-password/"
+
+
+def test_system_admin_resets_a_password_after_confirming_their_own(world):
+    from django.test import Client
+
+    admin_client, _ = login("SYSTEM_ADMIN")
+    _, target = login("EDITOR", [2], username="teacher")
+    target_session = Client()
+    target_session.force_login(target)
+    assert target_session.get("/api/v1/auth/session/").json()["authenticated"] is True
+
+    wrong = admin_client.post(reset_url(target), {"current_password": "not-my-password"}, format="json")
+    assert wrong.status_code == 400
+    target.refresh_from_db()
+    assert target.check_password(STRONG)  # nothing changed
+
+    response = admin_client.post(reset_url(target), {"current_password": STRONG}, format="json")
+    assert response.status_code == 200, response.data
+    assert response["Cache-Control"] == "no-store"
+    new_password = response.data["password"]
+    assert response.data["username"] == "teacher" and len(new_password) >= 12
+    target.refresh_from_db()
+    assert target.check_password(new_password) and not target.check_password(STRONG)
+    # The target's existing sessions end; the password is never returned again.
+    assert target_session.get("/api/v1/auth/session/").json()["authenticated"] is False
+    listing = admin_client.get("/api/v1/users/")
+    assert "password" not in str(listing.data) and new_password not in str(listing.data)
+    assert "password" not in admin_client.get(f"/api/v1/users/{target.pk}/").data
+
+
+def test_password_reset_requires_the_confirmation_password(world):
+    client, _ = login("SYSTEM_ADMIN")
+    _, target = login("VIEWER", [2], username="viewer1")
+    assert client.post(reset_url(target), {}, format="json").status_code == 400
+    assert client.post(reset_url(target), {"current_password": ""}, format="json").status_code == 400
+    assert client.post(reset_url(target), {"current_password": 12345}, format="json").status_code == 400
+    target.refresh_from_db()
+    assert target.check_password(STRONG)
+
+
+def test_only_system_administrators_may_reset_passwords(world):
+    _, target = login("VIEWER", [2], username="viewer1")
+    for role in ("DEPARTMENT_ADMIN", "EDITOR", "VIEWER"):
+        client, _ = login(role, [2], username=f"actor_{role.lower()}")
+        response = client.post(reset_url(target), {"current_password": STRONG}, format="json")
+        assert response.status_code == 403, role
+    anonymous = APIClient()
+    assert anonymous.post(reset_url(target), {"current_password": STRONG}, format="json").status_code in (401, 403)
+    target.refresh_from_db()
+    assert target.check_password(STRONG)
+
+
+def test_a_system_administrator_cannot_reset_their_own_password_here(world):
+    client, admin = login("SYSTEM_ADMIN")
+    assert client.post(reset_url(admin), {"current_password": STRONG}, format="json").status_code == 403
+    admin.refresh_from_db()
+    assert admin.check_password(STRONG)
+
+
+def test_wrong_confirmation_passwords_are_throttled(world, settings):
+    settings.LOGIN_FAILURE_LIMIT = 3
+    client, _ = login("SYSTEM_ADMIN")
+    _, target = login("EDITOR", [2], username="teacher")
+    for _ in range(3):
+        assert client.post(reset_url(target), {"current_password": "wrong-password-1"}, format="json").status_code == 400
+    blocked = client.post(reset_url(target), {"current_password": STRONG}, format="json")
+    assert blocked.status_code == 429 and "Retry-After" in blocked
+    target.refresh_from_db()
+    assert target.check_password(STRONG)

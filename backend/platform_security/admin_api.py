@@ -6,6 +6,8 @@ All other roles, API keys and anonymous callers are refused. The configured
 access policy stays authoritative, so the default ``NoAccessPolicy`` denies.
 """
 
+import logging
+import secrets
 from types import SimpleNamespace
 
 from django.contrib.auth import get_user_model
@@ -13,6 +15,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from rest_framework import mixins, serializers, status, viewsets
+from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -23,10 +26,12 @@ from local_departments.models import Department, Organisation
 from metadata.access import get_access_policy
 from metadata.filters import MetadataPagination
 
+from .login_throttle import LoginThrottled, LoginThrottleUnavailable, authenticate_with_throttle
 from .models import UserDepartment, UserRole
 
 Role = UserRole.Role
 MIN_PASSWORD_LENGTH = 12
+logger = logging.getLogger(__name__)
 
 
 def _principal(request):
@@ -214,6 +219,46 @@ class UserViewSet(
             UserDepartment.objects.bulk_create(
                 [UserDepartment(user=user, department_id=pk) for pk in wanted - existing]
             )
+
+    @action(detail=True, methods=["post"], url_path="reset-password")
+    def reset_password(self, request, pk=None):
+        """System Administrators only: confirm with your own password, get a new random password once.
+
+        Passwords are stored only as hashes, so an existing password can never be shown. This sets a
+        new random one, returns it in this response only, and ends the user's other sessions.
+        """
+        if self.administered is not None:
+            raise PermissionDenied("System Administrator access is required.")
+        user = self.get_object()
+        if user.pk == request.user.pk:
+            raise PermissionDenied("Change your own password from Settings.")
+        current = request.data.get("current_password") if hasattr(request.data, "get") else None
+        if not isinstance(current, str) or not current or "\x00" in current:
+            return Response({"current_password": ["Enter your own password to continue."]}, status=400)
+        try:
+            confirmed = authenticate_with_throttle(request, request.user.get_username(), current)
+        except LoginThrottled as error:
+            return Response(
+                {"detail": "Too many attempts. Try again later."}, status=429,
+                headers={"Retry-After": str(error.retry_after)},
+            )
+        except LoginThrottleUnavailable:
+            return Response({"detail": "Password confirmation is temporarily unavailable."}, status=503,
+                            headers={"Retry-After": "1"})
+        if confirmed is None or confirmed.pk != request.user.pk:
+            return Response({"current_password": ["Your password is incorrect."]}, status=400)
+        while True:
+            password = secrets.token_urlsafe(12)
+            try:
+                validate_password(password, user)
+            except DjangoValidationError:
+                continue
+            break
+        user.set_password(password)
+        user.save(update_fields=["password"])
+        logger.info("Password of user %s reset by %s", user.pk, request.user.pk)
+        return Response({"id": user.pk, "username": user.get_username(), "password": password},
+                        headers={"Cache-Control": "no-store"})
 
     def destroy(self, request, *args, **kwargs):
         user = self.get_object()
