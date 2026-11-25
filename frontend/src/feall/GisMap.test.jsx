@@ -37,13 +37,13 @@ describe('GIS resource identities',()=>{
   await waitFor(()=>expect(mocks.fit).toHaveBeenCalled());
   mocks.view.mockClear();
   rerender(<GisMap records={{'physical-devices':[],'network-elements':[]}}/>);
-  await waitFor(()=>expect(mocks.view).toHaveBeenCalledWith([35.14,33.39],10,{animate:false}));
+  await waitFor(()=>expect(mocks.fit).toHaveBeenLastCalledWith([[34.55,32.25],[35.72,34.62]],{animate:false}));
  });
  it('zooms to and selects the record passed from "Show on map"',async()=>{
   mocks.fit.mockClear();
   render(<GisMap focusKey="Network Element:1" records={{'physical-devices':[{id:1,name:'Device',latitude:35,longitude:33}],'network-elements':[{id:1,name:'Inlet',geometryType:'Point',latitude:35,longitude:34}]}}/>);
   await waitFor(()=>expect(mocks.fit).toHaveBeenCalled());
-  expect(mocks.fit.mock.calls[0][0].name).toBe('Inlet');
+  expect(mocks.fit.mock.calls.find(c=>c[0]?.name)[0].name).toBe('Inlet');
   expect(screen.getByRole('button',{name:/Inlet Network Element/})).toHaveClass('selected');
   expect(screen.getByText('Selected metadata').parentElement.querySelector('dd').textContent).toBe('Inlet');
  });
