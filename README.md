@@ -119,7 +119,41 @@ The optional demo fixtures use Platform ID 1 only in an empty isolated demo data
 `METADATA_DEPARTMENT_MODEL` defaults to `local_departments.Department`. Agree the shared model and migration strategy before using a shared database. `METADATA_ACCESS_POLICY` must point to the team's real installed adapter for authorized metadata workflows.
 
 See the [API contract and permission boundary](docs/development/argyris-api-examples.md), [backend handover](docs/development/argyris-backend.md) and [database upgrade runbook](docs/development/argyris-database.md). The local integration retains the PR #31 explicit configuration and PR #32 replacement migration. Follow the [integration guide](docs/development/phase3-integration.md) for Organisation backfill, role provisioning, safe Compose startup and disposable validation.
+## Quick start (run locally with Docker)
 
+Requirements: [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Docker Engine with Compose) and Git. Nothing else needs to be installed.
+
+```sh
+git clone https://github.com/chrystaleni/sensor-metadata-platform.git
+cd sensor-metadata-platform
+cp .env.example .env
+```
+
+Edit `.env` and set your own `POSTGRES_PASSWORD` and a unique `DJANGO_SECRET_KEY` (the backend refuses the insecure example value). Also add:
+
+```dotenv
+METADATA_ACCESS_POLICY=platform_security.access.DepartmentAccessPolicy
+```
+
+Build, create the database and the shared Platform Department:
+
+```sh
+docker compose build
+docker compose up -d db
+docker compose run --rm backend python manage.py migrate --noinput
+docker compose run --rm backend python manage.py provision_platform_department
+```
+
+Copy the Department ID printed by the last command into `.env` as `METADATA_PLATFORM_DEPARTMENT_ID=<id>`, then create your first System Administrator (you will be asked for a password) and start the application:
+
+```sh
+docker compose run --rm backend python manage.py configure_platform_user admin --create --role SYSTEM_ADMIN
+docker compose up -d backend frontend
+```
+
+Open <http://localhost:8080> and sign in. More users can then be created in **Administration**.
+
+Useful commands: `docker compose logs -f backend` to see logs, `docker compose stop` to pause, and `docker compose up -d backend frontend` to start again. `docker compose down` keeps your data; `docker compose down --volumes` deletes it. The map needs an internet connection for its basemap tiles. See the [integration guide](docs/development/phase3-integration.md) for details.
 ## Continuous integration
 
 GitHub Actions runs automated checks on every branch push, on pull requests targeting `main`, and when manually started with `workflow_dispatch`. The backend job installs `backend/requirements.txt`, runs Django's system check, applies migrations, checks for missing migrations and runs pytest. The frontend job installs from `frontend/package-lock.json`, then runs the test suite, ESLint, and a production build. Team members can view workflow runs in the repository's **Actions** tab or check results on a pull request.
