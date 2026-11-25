@@ -16,15 +16,21 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import APIException, PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from api_keys.authentication import KeyAwareSessionAuthentication
+from api_keys.models import APIKey
 from api_keys.permissions import managed_departments
 from local_departments.models import Department, Organisation
 from metadata.access import get_access_policy
 from metadata.filters import MetadataPagination
+from metadata.models import (
+    ExternalIdentifier, Measurement, MeasurementType, MeasurementUnit, NetworkElement, NetworkElementType,
+    PhysicalDevice, PhysicalDeviceType,
+)
+from metadata.platform import PLATFORM_CODE
 
 from .login_throttle import LoginThrottled, LoginThrottleUnavailable, authenticate_with_throttle
 from .models import UserDepartment, UserRole
@@ -51,6 +57,25 @@ def is_system_admin(request):
     )
 
 
+def require_system_admin(request):
+    if not is_system_admin(request):
+        raise PermissionDenied("System Administrator access is required.")
+
+
+class DeleteBlocked(APIException):
+    status_code = 409
+    default_detail = "This item is still in use."
+    default_code = "in_use"
+
+
+DEPARTMENT_CONTENTS = (
+    (Measurement, "measurements"), (PhysicalDevice, "physical devices"), (NetworkElement, "network elements"),
+    (ExternalIdentifier, "external identifiers"), (MeasurementType, "measurement types"),
+    (MeasurementUnit, "measurement units"), (PhysicalDeviceType, "device types"),
+    (NetworkElementType, "element types"), (UserDepartment, "user memberships"), (APIKey, "API keys"),
+)
+
+
 def administered_department_ids(request):
     """Department IDs the caller may administer; ``None`` means every Department."""
     if is_system_admin(request):
@@ -71,9 +96,10 @@ class DepartmentSerializer(serializers.ModelSerializer):
 
 
 class DepartmentViewSet(
-    mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet,
+    mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.CreateModelMixin, mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
 ):
-    """GET lists readable Departments; POST (System Administrator) creates one."""
+    """GET lists readable Departments; POST and DELETE (System Administrator) create or remove one."""
 
     authentication_classes = (KeyAwareSessionAuthentication,)
     permission_classes = (IsAuthenticated,)
@@ -88,6 +114,20 @@ class DepartmentViewSet(
         if not is_system_admin(request):
             raise PermissionDenied("System Administrator access is required.")
         return super().create(request, *args, **kwargs)
+
+    @transaction.atomic
+    def destroy(self, request, *args, **kwargs):
+        require_system_admin(request)
+        department = self.get_object()
+        if department.organisation.code == PLATFORM_CODE:
+            raise DeleteBlocked("The Platform Department holds the shared lists and cannot be deleted.")
+        in_use = [f"{count} {label}" for model, label in DEPARTMENT_CONTENTS
+                  if (count := model.objects.filter(department_id=department.pk).count())]
+        if in_use:
+            raise DeleteBlocked(f"Department '{department.name}' still has {', '.join(in_use)}. "
+                                "Move or delete them first.")
+        department.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -202,6 +242,8 @@ class UserViewSet(
             raise PermissionDenied("You cannot change your own role or deactivate yourself.")
         if "username" in data:
             user.username = data["username"]
+        if data.get("is_active") is True and not user.is_active and self.administered is not None:
+            raise PermissionDenied("Only System Administrators can reactivate users.")
         if "is_active" in data:
             user.is_active = data["is_active"]
         if "password" in data:
@@ -268,6 +310,33 @@ class UserViewSet(
         user.save(update_fields=["is_active"])
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+    @action(detail=True, methods=["post"])
+    def reactivate(self, request, pk=None):
+        """System Administrators only: let a deactivated user sign in again."""
+        if self.administered is not None:
+            raise PermissionDenied("System Administrator access is required.")
+        user = self.get_object()
+        user.is_active = True
+        user.save(update_fields=["is_active"])
+        return Response(self.get_serializer(user).data)
+
+    @action(detail=True, methods=["delete"])
+    def purge(self, request, pk=None):
+        """System Administrators only: permanently delete a deactivated user.
+
+        Records they created stay; their "created by" and "updated by" become empty.
+        """
+        if self.administered is not None:
+            raise PermissionDenied("System Administrator access is required.")
+        user = self.get_object()
+        if user.pk == request.user.pk:
+            raise PermissionDenied("You cannot delete yourself.")
+        if user.is_active:
+            raise DeleteBlocked("Deactivate the user before deleting them permanently.")
+        logger.info("User %s permanently deleted by %s", user.pk, request.user.pk)
+        user.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class OrganisationSerializer(serializers.ModelSerializer):
     class Meta:
@@ -282,9 +351,10 @@ class OrganisationSerializer(serializers.ModelSerializer):
 
 
 class OrganisationViewSet(
-    mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet,
+    mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.CreateModelMixin, mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
 ):
-    """GET lists Organisations the caller can see; POST (System Administrator) creates one."""
+    """GET lists Organisations the caller can see; POST and DELETE (System Administrator) create or remove one."""
 
     authentication_classes = (KeyAwareSessionAuthentication,)
     permission_classes = (IsAuthenticated,)
@@ -301,3 +371,16 @@ class OrganisationViewSet(
         if not is_system_admin(request):
             raise PermissionDenied("System Administrator access is required.")
         return super().create(request, *args, **kwargs)
+
+    @transaction.atomic
+    def destroy(self, request, *args, **kwargs):
+        require_system_admin(request)
+        organisation = self.get_object()
+        if organisation.code == PLATFORM_CODE:
+            raise DeleteBlocked("The Platform Organisation cannot be deleted.")
+        departments = organisation.departments.count()
+        if departments:
+            raise DeleteBlocked(f"Organisation '{organisation.name}' still has {departments} Department(s). "
+                                "Delete them first.")
+        organisation.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

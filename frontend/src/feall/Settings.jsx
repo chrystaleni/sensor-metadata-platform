@@ -56,6 +56,9 @@ function Organisations({api,onChanged}){
   Promise.all([fetchAllPages(api,'/organisations/',{signal:c.signal}),fetchAllPages(api,'/departments/',{signal:c.signal})])
    .then(([o,d])=>{if(live){setOrgs(o);setDeps(d)}}).catch(e=>{if(live&&e?.name!=='AbortError')setError(formatApiError(e))});
   return()=>{live=false;c.abort()}},[api,tick]);
+ async function remove(path,name,label){if(!window.confirm(`Delete ${label} ${name}? This cannot be undone.`))return;setError('');setOk('');
+  try{await api(path,{method:'DELETE'});setTick(t=>t+1);setOk(`${label} ${name} deleted.`);onChanged?.()}
+  catch(err){setError(formatApiError(err))}}
  async function add(path,data,reset,label){setError('');setOk('');
   try{await api(path,{method:'POST',data});reset();setTick(t=>t+1);setOk(`${label} created. Add users to it from the Administration page.`);onChanged?.()}
   catch(err){const d=err?.details;setError(d&&typeof d==='object'?Object.values(d).flat().join(' '):formatApiError(err))}}
@@ -69,7 +72,10 @@ function Organisations({api,onChanged}){
    <label>Organisation<select required value={dep.organisation} onChange={e=>setDep(d=>({...d,organisation:e.target.value}))}><option value="">Select…</option>{orgs.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
    <button className="adm-btn">Add Department</button></form>
   <Message error={error} ok={ok}/>
-  <table className="adm-table"><thead><tr><th>Organisation</th><th>Departments</th></tr></thead><tbody>{orgs.map(o=><tr key={o.id}><td><strong>{o.name}</strong> <span className="adm-mono">{o.code}</span></td><td>{deps.filter(d=>d.organisation===o.id).map(d=>d.name).join(', ')||'None'}</td></tr>)}</tbody></table></Card>;
+  <p className="adm-hint" style={{padding:"0 22px 12px"}}>Only empty Departments (no records, users or API keys) and Organisations without Departments can be deleted. Platform cannot be deleted.</p>
+  <table className="adm-table"><thead><tr><th>Organisation</th><th>Departments</th><th/></tr></thead><tbody>{orgs.map(o=><tr key={o.id}><td><strong>{o.name}</strong> <span className="adm-mono">{o.code}</span></td>
+   <td>{deps.filter(d=>d.organisation===o.id).map(d=><span key={d.id} className="adm-chip">{d.name}{o.code!=='platform'&&<button type="button" className="adm-chip-x" aria-label={`Delete Department ${d.name}`} onClick={()=>remove(`/departments/${d.id}/`,d.name,'Department')}>×</button>}</span>)}{!deps.some(d=>d.organisation===o.id)&&'None'}</td>
+   <td className="actions">{o.code!=='platform'&&<button type="button" className="adm-btn ghost danger" aria-label={`Delete Organisation ${o.name}`} onClick={()=>remove(`/organisations/${o.id}/`,o.name,'Organisation')}>Delete</button>}</td></tr>)}</tbody></table></Card>;
 }
 
 function SignOut({onLogout}){

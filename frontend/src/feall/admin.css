@@ -21,3 +21,6 @@
 .adm-facts{margin:0;padding:6px 22px 16px;display:grid}.adm-facts div{display:grid;grid-template-columns:150px 1fr;gap:12px;padding:10px 0;border-bottom:1px solid #f0f3f6;font-size:13px}.adm-facts div:last-child{border-bottom:0}.adm-facts dt{color:#8794a2}.adm-facts dd{margin:0;color:#233143;font-weight:500}
 .adm-ok{margin:0 22px 18px;padding:10px 13px;border-radius:7px;background:#e8f7f3;border:1px solid #bfe6dc;color:#17695d;font-size:12px}.adm-hint{margin:0;font-size:12px;color:#7d8998;align-self:center}
 .adm-links{display:flex;gap:10px;padding:16px 22px 4px}.adm-links a{display:inline-flex;align-items:center;text-decoration:none}
+.adm-chip{display:inline-flex;align-items:center;gap:4px;margin:2px 6px 2px 0;padding:3px 4px 3px 9px;border:1px solid #d9e0e7;border-radius:999px;font-size:12px;white-space:nowrap}
+.adm-chip-x{border:0;background:none;color:#b3412f;font-size:15px;line-height:1;cursor:pointer;padding:0 4px;border-radius:50%}
+.adm-chip-x:hover{background:#fdf3f1}

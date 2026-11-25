@@ -25,7 +25,9 @@ export default function UsersAdmin({departments=[],role,allowed,currentUser}){
   try{await api('/users/',{method:'POST',data:{...form,departments:form.departments.map(Number)}});setForm(blank);reload()}
   catch(err){setError(formatApiError(err))}finally{setBusy(false)}}
  async function deactivate(u){setError('');try{await api(`/users/${u.id}/`,{method:'DELETE'});reload()}catch(err){setError(formatApiError(err))}}
- async function reactivate(u){setError('');try{await api(`/users/${u.id}/`,{method:'PATCH',data:{is_active:true}});reload()}catch(err){setError(formatApiError(err))}}
+ // Reactivate and permanent delete: System Administrators only (also enforced by the server).
+ async function reactivate(u){setError('');try{await api(`/users/${u.id}/reactivate/`,{method:'POST'});reload()}catch(err){setError(formatApiError(err))}}
+ async function purge(u){if(!window.confirm(`Permanently delete ${u.username}? This cannot be undone. Records they created stay, without their name.`))return;setError('');try{await api(`/users/${u.id}/purge/`,{method:'DELETE'});reload()}catch(err){setError(formatApiError(err))}}
 
  // System Administrators only (also enforced by the server). Passwords are stored as hashes and can never be
  // shown, so this sets a new random password and displays it once.
@@ -56,7 +58,7 @@ export default function UsersAdmin({departments=[],role,allowed,currentUser}){
      <td><span className={`adm-badge ${u.is_active?'ok':'off'}`}>{u.is_active?'Active':'Inactive'}</span></td>
      <td className="actions">{role==='SYSTEM_ADMIN'&&u.username!==currentUser&&<button className="adm-btn ghost" aria-label={`Reset password for ${u.username}`} onClick={()=>{setReset({user:u,current:'',password:'',busy:false,error:''});setCopied(false)}}>Reset password</button>}{u.is_active
       ?<button className="adm-btn ghost danger" aria-label={`Deactivate ${u.username}`} onClick={()=>deactivate(u)}>Deactivate</button>
-      :<button className="adm-btn ghost" aria-label={`Reactivate ${u.username}`} onClick={()=>reactivate(u)}>Reactivate</button>}</td></tr>)}</tbody></table>
+      :role==='SYSTEM_ADMIN'&&<><button className="adm-btn ghost" aria-label={`Reactivate ${u.username}`} onClick={()=>reactivate(u)}>Reactivate</button><button className="adm-btn ghost danger" aria-label={`Delete ${u.username}`} onClick={()=>purge(u)}>Delete</button></>}</td></tr>)}</tbody></table>
     :<p className="adm-empty">No users to show.</p>}
   </div>
   {reset&&<div className="all-overlay"><section className="all-dialog" role="dialog" aria-modal="true" aria-label={`Reset password for ${reset.user.username}`}>
