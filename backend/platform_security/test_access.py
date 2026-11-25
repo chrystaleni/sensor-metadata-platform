@@ -158,7 +158,7 @@ def test_role_changes_take_effect_for_same_authenticated_user(api):
 CATALOGS = ("measurement-types", "measurement-units", "physical-device-types", "network-element-types")
 
 
-@pytest.mark.parametrize("role", [UserRole.Role.VIEWER, UserRole.Role.EDITOR, UserRole.Role.DEPARTMENT_ADMIN])
+@pytest.mark.parametrize("role", [UserRole.Role.VIEWER, UserRole.Role.EDITOR])
 def test_department_role_reads_catalogs_with_membership_but_cannot_mutate(api, role):
     client, _, _ = api
     user = authenticate(client, role, [2], is_staff=True, is_superuser=True)
@@ -173,6 +173,19 @@ def test_department_role_reads_catalogs_with_membership_but_cannot_mutate(api, r
     user.department_memberships.all().delete()
     for resource in CATALOGS:
         assert client.get(f"/api/v1/{resource}/").json()["count"] == 0
+
+
+@pytest.mark.parametrize("role", [UserRole.Role.DEPARTMENT_ADMIN, UserRole.Role.SYSTEM_ADMIN])
+def test_department_and_system_admins_manage_catalogs(api, role):
+    client, _, _ = api
+    authenticate(client, role, [2])
+    for resource in CATALOGS:
+        url = f"/api/v1/{resource}/"
+        created = client.post(url, {"department": 1, "name": f"Admin {role}"}, format="json")
+        assert created.status_code == 201, created.content
+        item_url = f"{url}{created.json()['id']}/"
+        assert client.patch(item_url, {"description": "edited"}, format="json").status_code == 200
+        assert client.delete(item_url).status_code == 204
 
 
 @pytest.mark.parametrize(("role", "flags", "list_status", "detail_status"), [

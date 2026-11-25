@@ -143,19 +143,47 @@ class ArchivedRecordTests(APITestCase):
         self.assertEqual(self.client.delete(f"{API}physical-devices/{device}/purge/").status_code, 404)
         self.assertTrue(PhysicalDevice.objects.filter(pk=device).exists())
 
-    def test_shared_lists_archive_is_for_system_admins(self):
-        entry = PhysicalDeviceType.objects.create(department_id=1, name="Old logger")
-        self.as_user("system-admin")
-        self.assertEqual(self.client.delete(f"{API}physical-device-types/{entry.pk}/").status_code, 204)
-        listed = self.client.get(f"{API}physical-device-types/", {"include_archived": "true", "page_size": 100}).json()
-        self.assertIn(entry.pk, [row["id"] for row in listed["results"] if row["is_active"] is False])
+    def test_department_and_system_admins_delete_shared_list_entries(self):
+        for admin in ("dept-admin", "system-admin"):
+            entry = PhysicalDeviceType.objects.create(department_id=1, name=f"Old logger {admin}")
+            self.as_user(admin)
+            self.assertEqual(self.client.delete(f"{API}physical-device-types/{entry.pk}/").status_code, 204, admin)
+            listed = self.client.get(f"{API}physical-device-types/", {"include_archived": "true", "page_size": 100}).json()
+            self.assertIn(entry.pk, [row["id"] for row in listed["results"] if row["is_active"] is False], admin)
+            self.assertEqual(self.client.post(f"{API}physical-device-types/{entry.pk}/restore/").status_code, 200, admin)
+            self.assertEqual(self.client.delete(f"{API}physical-device-types/{entry.pk}/").status_code, 204, admin)
+            self.assertEqual(self.client.delete(f"{API}physical-device-types/{entry.pk}/purge/").status_code, 204, admin)
+            self.assertFalse(PhysicalDeviceType.objects.filter(pk=entry.pk).exists(), admin)
+
+    def test_department_and_system_admins_add_and_edit_shared_list_entries(self):
+        for admin in ("dept-admin", "system-admin"):
+            self.as_user(admin)
+            created = self.client.post(f"{API}physical-device-types/", {"department": 1, "name": f"New {admin}"}, format="json")
+            self.assertEqual(created.status_code, 201, admin)
+            edited = self.client.patch(f"{API}physical-device-types/{created.json()['id']}/", {"description": "x"}, format="json")
+            self.assertEqual(edited.status_code, 200, admin)
+        for user in ("viewer", "editor"):
+            self.as_user(user)
+            self.assertEqual(self.client.post(f"{API}physical-device-types/", {"department": 1, "name": f"New {user}"}, format="json").status_code, 403, user)
+
+    def test_viewers_and_editors_cannot_change_shared_list_entries(self):
+        entry = PhysicalDeviceType.objects.create(department_id=1, name="Logger")
+        for user in ("viewer", "editor"):
+            self.as_user(user)
+            self.assertEqual(self.client.delete(f"{API}physical-device-types/{entry.pk}/").status_code, 403, user)
+            listed = self.client.get(f"{API}physical-device-types/", {"include_archived": "true", "page_size": 100}).json()
+            self.assertTrue(all(row["is_active"] for row in listed["results"]), user)
+        self.assertIsNone(PhysicalDeviceType.objects.get(pk=entry.pk).deleted_at)
+
+    def test_shared_list_entry_in_use_is_protected(self):
+        self.make_records()
         self.as_user("dept-admin")
-        self.assertEqual(self.client.post(f"{API}physical-device-types/{entry.pk}/restore/").status_code, 404)
+        used = self.client.delete(f"{API}physical-device-types/{self.catalog['device_type']}/")
+        self.assertEqual(used.status_code, 409)
         self.as_user("system-admin")
-        PhysicalDeviceType.objects.create(department_id=1, name="old logger")
-        self.assertEqual(self.client.post(f"{API}physical-device-types/{entry.pk}/restore/").status_code, 409)
-        self.assertEqual(self.client.delete(f"{API}physical-device-types/{entry.pk}/purge/").status_code, 204)
-        self.assertFalse(PhysicalDeviceType.objects.filter(pk=entry.pk).exists())
+        PhysicalDeviceType.objects.create(department_id=1, name="Clash")
+        clash = PhysicalDeviceType.objects.create(department_id=1, name="clash", deleted_at=timezone.now())
+        self.assertEqual(self.client.post(f"{API}physical-device-types/{clash.pk}/restore/").status_code, 409)
 
     def test_api_keys_cannot_see_or_change_archived_records(self):
         _, _, measurement = self.make_records()

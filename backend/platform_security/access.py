@@ -14,7 +14,10 @@ class DepartmentAccessPolicy(NoAccessPolicy):
         return self._department_ids(request, write=True)
 
     def can_manage_controlled_lists(self, request):
-        return not self._api_key(request) and self._role(request) == UserRole.Role.SYSTEM_ADMIN
+        # Department and System Administrators add, edit, archive, restore and delete shared list entries.
+        return not self._api_key(request) and self._role(request) in (
+            UserRole.Role.SYSTEM_ADMIN, UserRole.Role.DEPARTMENT_ADMIN,
+        )
 
     def archive_manager_department_ids(self, request):
         if self._api_key(request):
