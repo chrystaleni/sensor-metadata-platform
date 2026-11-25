@@ -11,7 +11,7 @@ vi.mock('maplibre-gl',()=>({
   setWorkerUrl:vi.fn()
 }));
 
-import {loadGreekMapStyle,addGreekBasemap} from './greekBasemap';
+import {loadGreekMapStyle,addGreekBasemap,addMapControls,BASEMAP_NAMES} from './greekBasemap';
 
 afterEach(()=>vi.unstubAllGlobals());
 
@@ -172,3 +172,37 @@ describe('map worker deployment',()=>{
     expect(config).toMatch(/location\s+~\*?\s+\\\.mjs\$\s*\{[^}]*default_type\s+(text|application)\/javascript\s*;/);
   });
 });
+
+describe('map controls',()=>{
+  afterEach(()=>{vi.restoreAllMocks();});
+  function fakeLeaflet(){
+    const added=[];const control={addBaseLayer:vi.fn((layer,name)=>added.push([name,layer])),removeLayer:vi.fn(),addTo:vi.fn(function(){return this})};
+    const tile=kind=>({kind,addTo:vi.fn(function(){return this})});
+    const L={
+      control:Object.assign({layers:vi.fn(()=>control)},{scale:vi.fn(()=>({addTo:vi.fn()}))}),
+      tileLayer:Object.assign(vi.fn(()=>tile('plain')),{wms:vi.fn(()=>tile('ortho'))}),
+    };
+    return {L,control,added};
+  }
+  it('offers the map, the label-free map and the Lands and Surveys orthophoto, with a metric scale',()=>{
+    vi.spyOn(HTMLCanvasElement.prototype,'getContext').mockReturnValue(null); // no WebGL: the map entry is the label-free tiles
+    const {L,added}=fakeLeaflet();
+    addMapControls({getContainer:()=>({}),on:vi.fn(),removeLayer:vi.fn()},null,L);
+    expect(added.map(([name])=>name)).toEqual([BASEMAP_NAMES.map,BASEMAP_NAMES.plain,BASEMAP_NAMES.ortho]);
+    expect(L.tileLayer.wms.mock.calls[0][0]).toContain('eservices.dls.moi.gov.cy');
+    expect(L.tileLayer.wms.mock.calls[0][1]).toMatchObject({layers:'0',attribution:'© Department of Lands and Surveys'});
+    expect(L.control.scale).toHaveBeenCalledWith({position:'bottomleft',imperial:false});
+  });
+  it('replaces the map entry when the vector map falls back to plain tiles',async()=>{
+    const {maplibreGL}=await import('@maplibre/maplibre-gl-leaflet');
+    vi.spyOn(HTMLCanvasElement.prototype,'getContext').mockImplementation(t=>String(t).startsWith('webgl')?{}:null);
+    const events={};const vector={on:(n,f)=>{events[n]=f}};const layer={getMaplibreMap:()=>vector};layer.addTo=()=>layer;
+    maplibreGL.mockReturnValue(layer);
+    const {L,control}=fakeLeaflet();
+    addMapControls({getContainer:()=>({}),on:vi.fn(),removeLayer:vi.fn()},{},L);
+    events.error(new Error('blocked'));
+    expect(control.removeLayer).toHaveBeenCalledWith(layer);
+    expect(control.addBaseLayer).toHaveBeenLastCalledWith(expect.objectContaining({kind:'plain'}),BASEMAP_NAMES.map);
+  });
+});
+

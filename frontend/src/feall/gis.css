@@ -7,3 +7,7 @@
 .gis-fit{border:1px solid #b9cbd8;border-radius:7px;padding:7px 11px;background:#fff;color:#244b67;cursor:pointer}
 .gis-fit:disabled{opacity:.5;cursor:not-allowed}
 @media(max-width:600px){.gis-legend{gap:7px;left:8px;bottom:8px;padding:7px;font-size:11px}}
+.gis-fullscreen{width:34px;height:34px;background:#fff;border:2px solid rgba(0,0,0,.2);border-radius:4px;font-size:18px;line-height:1;cursor:pointer;color:#334155}
+.gis-fullscreen:hover{background:#f4f6f8}
+.gis-map-frame:fullscreen{background:#fff}
+.gis-map:fullscreen{height:100%!important}

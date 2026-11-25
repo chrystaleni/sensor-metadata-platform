@@ -3,7 +3,7 @@ import {describe,it,expect,vi} from 'vitest';
 const mocks=vi.hoisted(()=>({fit:vi.fn(),view:vi.fn()}));
 vi.mock('./greekBasemap',()=>({
  loadGreekMapStyle:async()=>({version:8,sources:{},layers:[]}),
- addGreekBasemap:vi.fn()
+ addMapControls:vi.fn()
 }));
 vi.mock('./mapUtils',async importOriginal=>{
  const actual=await importOriginal();
