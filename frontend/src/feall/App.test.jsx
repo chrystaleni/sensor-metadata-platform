@@ -106,3 +106,24 @@ it('shows shared lists read-only to Viewers and Editors',async()=>{
   cleanup();window.location.hash='';
  }
 });
+
+it('filters record tables by related records',async()=>{
+ const listCalls=[];
+ vi.stubGlobal('fetch',vi.fn(async(raw)=>{
+  const url=new URL(raw);let data;
+  if(url.pathname.endsWith('/auth/session/'))data={authenticated:true};
+  else if(url.pathname.endsWith('/auth/context/'))data={authenticated:true,role:'VIEWER',departments:[{id:7,name:'North',organisation:'Water',writable:false}],permissions:{manage_catalogs:false,manage_api_keys:false}};
+  else if(url.pathname.endsWith('/physical-device-types/'))data={count:2,results:[{id:11,name:'Logger'},{id:12,name:'Meter'}]};
+  else if(url.pathname.endsWith('/physical-devices/')){if(url.searchParams.get('page_size')==='10')listCalls.push(url.searchParams.get('device_type'));data={count:0,results:[]};}
+  else data={count:0,results:[]};
+  return {ok:true,status:200,json:async()=>data};
+ }));
+ render(<App/>);await screen.findByRole('button',{name:'Profile menu'});
+ fireEvent.click(screen.getByRole('link',{name:'Physical Devices',exact:true}));
+ const filter=await screen.findByLabelText('Filter by device type');
+ await waitFor(()=>expect([...filter.options].map(o=>o.textContent)).toEqual(['All','Logger','Meter']));
+ fireEvent.change(filter,{target:{value:'12'}});
+ await waitFor(()=>expect(listCalls).toContain('12'));
+ fireEvent.click(screen.getByRole('button',{name:'Clear filters'}));
+ await waitFor(()=>expect(listCalls.at(-1)).toBe(null));
+});
