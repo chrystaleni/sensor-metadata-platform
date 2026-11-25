@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from io import BytesIO
 import re
 from xml.etree.ElementTree import ParseError
 from zipfile import BadZipFile, ZipFile
@@ -6,10 +7,13 @@ from zlib import error as ZlibError
 
 from defusedxml.common import DefusedXmlException
 from django.db import transaction
-from openpyxl import load_workbook
+from django.http import HttpResponse
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Font
 from openpyxl.utils.exceptions import InvalidFileException
 from rest_framework import serializers, status
 from rest_framework.parsers import MultiPartParser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.utils import json
 from rest_framework.views import APIView
@@ -60,6 +64,23 @@ SHEETS = {
         ("description", "data_collection_config", "customer_account", "meter_account"),
     ),
 }
+
+
+def build_template(examples=None):
+    """The platform import template: one sheet per entity with its column headings."""
+    workbook = Workbook()
+    workbook.remove(workbook.active)
+    for name, spec in SHEETS.items():
+        sheet = workbook.create_sheet(name)
+        headers = (*spec.required, *spec.optional)
+        sheet.append(headers)
+        for cell in sheet[1][:len(spec.required)]:
+            cell.font = Font(bold=True)  # required columns
+        if examples:
+            sheet.append([examples[name].get(header) for header in headers])
+        sheet.freeze_panes = "A2"
+        sheet.auto_filter.ref = sheet.dimensions
+    return workbook
 
 
 class RejectedWorkbook(Exception):
@@ -263,3 +284,22 @@ class MetadataImportView(DepartmentScope, APIView):
         except RejectedWorkbook as error:
             return Response({"errors": error.errors}, status=status.HTTP_400_BAD_REQUEST)
         return Response({"created": counts}, status=status.HTTP_201_CREATED)
+
+
+class ImportTemplateView(APIView):
+    """GET: download the empty import template (required columns in bold)."""
+
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request):
+        output = BytesIO()
+        workbook = build_template()
+        workbook.save(output)
+        workbook.close()
+        response = HttpResponse(
+            output.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = 'attachment; filename="metadata-import-template.xlsx"'
+        return response
+

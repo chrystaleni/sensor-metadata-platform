@@ -4,9 +4,8 @@ import json
 from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
-from openpyxl import Workbook
 
-from metadata.imports import SHEETS
+from metadata.imports import build_template
 
 
 class Command(BaseCommand):
@@ -46,17 +45,8 @@ class Command(BaseCommand):
                 }),
             },
         }
-        workbook = Workbook()
-        workbook.remove(workbook.active)
+        workbook = build_template(examples if options["example"] else None)
         try:
-            for name, spec in SHEETS.items():
-                sheet = workbook.create_sheet(name)
-                headers = (*spec.required, *spec.optional)
-                sheet.append(headers)
-                if options["example"]:
-                    sheet.append([examples[name].get(header) for header in headers])
-                sheet.freeze_panes = "A2"
-                sheet.auto_filter.ref = sheet.dimensions
             workbook.save(destination)
         except OSError as error:
             raise CommandError(f"Could not write the workbook: {error}") from error
