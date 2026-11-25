@@ -31,7 +31,7 @@ MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 MAX_EXPANDED_BYTES = 25 * 1024 * 1024
 MAX_ROWS_PER_SHEET = 2000
 REF_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
-JSON_COLUMNS = {"location", "geometry", "external_identifiers", "data_collection_config"}
+JSON_COLUMNS = {"location", "geometry", "external_identifiers", "data_collection_config", "communication_parameters"}
 REFERENCE_SHEETS = {"physical_device": "Physical Devices", "network_element": "Network Elements"}
 
 
@@ -46,12 +46,13 @@ SHEETS = {
     "Physical Devices": Sheet(
         PhysicalDeviceSerializer,
         ("name", "device_type"),
-        ("ref", "description", "location"),
+        ("ref", "description", "location", "communication_parameters"),
     ),
     "Network Elements": Sheet(
         NetworkElementSerializer,
         ("name", "element_type"),
-        ("ref", "description", "geometry", "external_identifiers", "dma_model_id", "strategic_model_id"),
+        ("ref", "description", "geometry", "external_identifiers", "dma_model_id", "strategic_model_id",
+         "network_area", "elevation", "address"),
     ),
     "Measurements": Sheet(
         MeasurementSerializer,
