@@ -614,6 +614,11 @@ class MetadataAPITests(APITestCase):
         measurement = Measurement.objects.get()
         self.assertEqual(measurement.physical_device.name, "Example station")
         self.assertEqual(measurement.network_element.external_identifiers.get().value, "SITE-101")
+        # The new client fields travel through the platform template too.
+        self.assertEqual(measurement.physical_device.communication_parameters, {"IP": "10.0.0.10"})
+        element = measurement.network_element
+        self.assertEqual((element.network_area, element.elevation, element.address),
+                         ("Example area", 120.5, "Example Street 1, Nicosia"))
 
     def test_import_invalid_late_row_rolls_back_all_changes(self):
         sheets = self.workbook_sheets()

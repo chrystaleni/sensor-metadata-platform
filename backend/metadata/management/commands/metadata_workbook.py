@@ -30,10 +30,12 @@ class Command(BaseCommand):
             "Physical Devices": {
                 "ref": "station-a", "name": "Example station", "device_type": 1,
                 "location": json.dumps({"type": "Point", "coordinates": [33.36, 35.15]}),
+                "communication_parameters": json.dumps({"IP": "10.0.0.10"}),
             },
             "Network Elements": {
                 "ref": "site-a", "name": "Example site", "element_type": 1,
                 "external_identifiers": json.dumps([{"source": "DEMO", "value": "SITE-101"}]),
+                "network_area": "Example area", "elevation": 120.5, "address": "Example Street 1, Nicosia",
             },
             "Measurements": {
                 "name": "Example temperature", "physical_device": "@station-a", "network_element": "@site-a",
