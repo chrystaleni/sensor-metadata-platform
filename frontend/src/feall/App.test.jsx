@@ -164,3 +164,48 @@ it('opens the map at a record from its details',async()=>{
  fireEvent.click(screen.getByRole('button',{name:'Show on map'}));
  await waitFor(()=>expect(window.location.hash).toBe('#/gis-map'));
 });
+
+it('highlights the fields the server rejects and shows the message under them',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async(raw,init={})=>{
+  const url=new URL(raw);let data;
+  if(url.pathname.endsWith('/auth/session/'))data={authenticated:true};
+  else if(url.pathname.endsWith('/auth/context/'))data={authenticated:true,role:'EDITOR',departments:[{id:7,name:'North',organisation:'Water',writable:true}],permissions:{manage_catalogs:false,manage_api_keys:false}};
+  else if(url.pathname.endsWith('/physical-device-types/'))data={count:1,results:[{id:11,name:'Logger',is_active:true}]};
+  else if(init.method==='POST'&&url.pathname.endsWith('/physical-devices/'))return {ok:false,status:400,json:async()=>({name:['A device with this name already exists.']})};
+  else data={count:0,results:[]};
+  return {ok:true,status:200,json:async()=>data};
+ }));
+ render(<App/>);await screen.findByRole('button',{name:'Profile menu'});
+ fireEvent.click(screen.getByRole('link',{name:'Physical Devices',exact:true}));
+ fireEvent.click(await screen.findByRole('button',{name:/^\+ Add/}));
+ const dialog=screen.getByRole('dialog');
+ const name=dialog.querySelector('input');fireEvent.change(name,{target:{value:'Pump'}});
+ fireEvent.change(dialog.querySelector('select'),{target:{value:'11'}});
+ fireEvent.submit(dialog.querySelector('form'));
+ expect(await screen.findByText('A device with this name already exists.',{selector:'small'})).toBeInTheDocument();
+ expect(name).toHaveAttribute('aria-invalid','true');
+ expect(name.closest('label')).toHaveClass('all-invalid');
+ fireEvent.change(name,{target:{value:'Pump 2'}});
+ expect(name).not.toHaveAttribute('aria-invalid');
+});
+it('highlights a field that fails the check before sending',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async(raw)=>{
+  const url=new URL(raw);let data;
+  if(url.pathname.endsWith('/auth/session/'))data={authenticated:true};
+  else if(url.pathname.endsWith('/auth/context/'))data={authenticated:true,role:'EDITOR',departments:[{id:7,name:'North',organisation:'Water',writable:true}],permissions:{manage_catalogs:false,manage_api_keys:false}};
+  else if(url.pathname.endsWith('/physical-device-types/'))data={count:1,results:[{id:11,name:'Logger',is_active:true}]};
+  else data={count:0,results:[]};
+  return {ok:true,status:200,json:async()=>data};
+ }));
+ render(<App/>);await screen.findByRole('button',{name:'Profile menu'});
+ fireEvent.click(screen.getByRole('link',{name:'Physical Devices',exact:true}));
+ fireEvent.click(await screen.findByRole('button',{name:/^\+ Add/}));
+ const dialog=screen.getByRole('dialog');
+ fireEvent.change(dialog.querySelector('input'),{target:{value:'Pump'}});
+ fireEvent.change(dialog.querySelector('select'),{target:{value:'11'}});
+ const location=dialog.querySelectorAll('textarea')[1];
+ fireEvent.change(location,{target:{value:'{not json'}});
+ fireEvent.submit(dialog.querySelector('form'));
+ expect(await screen.findByText(/location must contain valid JSON/,{selector:'small'})).toBeInTheDocument();
+ expect(location).toHaveAttribute('aria-invalid','true');
+});

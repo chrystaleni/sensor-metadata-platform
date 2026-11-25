@@ -10,28 +10,30 @@ export const resources = {
 };
 export const catalogKeys=Object.keys(resources).slice(3);
 export const domainKeys=Object.keys(resources).slice(0,3);
+// An Error that names the form field it belongs to, so the form can highlight that field.
+export function fieldError(field,message){const error=new Error(message);error.field=field;return error;}
 export function parseRecordForm(resource, form, department, editing=false){
   const spec=resources[resource]; if(!spec)throw Error('Unknown resource');
   const result={};
   for(const [key,,type,required] of spec.fields){
     const raw=String(form[key]??'').trim();
-    if(required&&!raw)throw Error(`${key} is required.`);
+    if(required&&!raw)throw fieldError(key,`${key} is required.`);
     // Omit a blank identifier field on create and PATCH; [] explicitly clears it.
     if(!raw&&key==='external_identifiers')continue;
-    if(!raw){if(type==='geo'||type==='json'||type==='number')result[key]=null;else if(type&&resources[type]){if(required)throw Error(`${key} is required.`);}else result[key]='';continue;}
-    if(type&&resources[type]){if(!/^\d+$/.test(raw)||Number(raw)<1)throw Error(`Choose a valid ${key}.`);result[key]=Number(raw);}
+    if(!raw){if(type==='geo'||type==='json'||type==='number')result[key]=null;else if(type&&resources[type]){if(required)throw fieldError(key,`${key} is required.`);}else result[key]='';continue;}
+    if(type&&resources[type]){if(!/^\d+$/.test(raw)||Number(raw)<1)throw fieldError(key,`Choose a valid ${key}.`);result[key]=Number(raw);}
     else if(type==='json'||type==='geo'){
-      try{result[key]=JSON.parse(raw);}catch{throw Error(`${key} must contain valid JSON.`);}
+      try{result[key]=JSON.parse(raw);}catch{throw fieldError(key,`${key} must contain valid JSON.`);}
       if(type==='geo'){
-        const g=result[key];if(!g||!['Point','LineString','Polygon'].includes(g.type)||resource==='physical-devices'&&g.type!=='Point')throw Error('Unsupported geometry.');
-        const error=geometryError(g);if(error)throw Error(error);
+        const g=result[key];if(!g||!['Point','LineString','Polygon'].includes(g.type)||resource==='physical-devices'&&g.type!=='Point')throw fieldError(key,'Unsupported geometry.');
+        const error=geometryError(g);if(error)throw fieldError(key,error);
       }
-      if(key==='external_identifiers'&&!Array.isArray(result[key]))throw Error('External identifiers must be an array.');
-      if(key==='communication_parameters'&&(typeof result[key]!=='object'||Array.isArray(result[key])))throw Error('Communication parameters must be a JSON object.');
+      if(key==='external_identifiers'&&!Array.isArray(result[key]))throw fieldError(key,'External identifiers must be an array.');
+      if(key==='communication_parameters'&&(typeof result[key]!=='object'||Array.isArray(result[key])))throw fieldError(key,'Communication parameters must be a JSON object.');
     }else if(type==='number'){
       const number=Number(raw.replace(',','.'));
-      if(!Number.isFinite(number))throw Error(`${key} must be a number.`);
-      if(key==='elevation'&&(number<-1000||number>10000))throw Error('elevation must be between -1000 and 10000 metres.');
+      if(!Number.isFinite(number))throw fieldError(key,`${key} must be a number.`);
+      if(key==='elevation'&&(number<-1000||number>10000))throw fieldError(key,'elevation must be between -1000 and 10000 metres.');
       result[key]=number;
     }else result[key]=raw;
   }
