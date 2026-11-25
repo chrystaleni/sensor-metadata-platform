@@ -154,6 +154,14 @@ docker compose up -d backend frontend
 Open <http://localhost:8080> and sign in. More users can then be created in **Administration**.
 
 Useful commands: `docker compose logs -f backend` to see logs, `docker compose stop` to pause, and `docker compose up -d backend frontend` to start again. `docker compose down` keeps your data; `docker compose down --volumes` deletes it. The map needs an internet connection for its basemap tiles. See the [integration guide](docs/development/phase3-integration.md) for details.
+## Documentation
+
+- [User guide](docs/user-guide.md): how to use every page, by role.
+- [Extension guide](docs/extension-guide.md): where the code lives and how to add fields, lists, permissions, pages and endpoints.
+- [Release notes](docs/release-notes.md): what this release contains, upgrade notes and known limitations.
+- [API guide](docs/development/argyris-api-examples.md) and interactive OpenAPI documentation at `/api/v1/docs/` (after sign-in).
+- [Integration and validation guide](docs/development/phase3-integration.md).
+
 ## Continuous integration
 
 GitHub Actions runs automated checks on every branch push, on pull requests targeting `main`, and when manually started with `workflow_dispatch`. The backend job installs `backend/requirements.txt`, runs Django's system check, applies migrations, checks for missing migrations and runs pytest. The frontend job installs from `frontend/package-lock.json`, then runs the test suite, ESLint, and a production build. Team members can view workflow runs in the repository's **Actions** tab or check results on a pull request.
