@@ -72,7 +72,13 @@ function Organisations({api,onChanged}){
   <table className="adm-table"><thead><tr><th>Organisation</th><th>Departments</th></tr></thead><tbody>{orgs.map(o=><tr key={o.id}><td><strong>{o.name}</strong> <span className="adm-mono">{o.code}</span></td><td>{deps.filter(d=>d.organisation===o.id).map(d=>d.name).join(', ')||'None'}</td></tr>)}</tbody></table></Card>;
 }
 
-export default function Settings({session,api,department,onDepartment,pickable}){
+function SignOut({onLogout}){
+ const [busy,setBusy]=useState(false);
+ return <Card title="Sign out" about="End your session on this device. You will need your password to sign in again.">
+  <div className="adm-form"><div><button type="button" className="adm-btn ghost danger" disabled={busy} onClick={async()=>{setBusy(true);try{await onLogout()}finally{setBusy(false)}}}>{busy?'Logging out…':'Log out'}</button></div></div></Card>;
+}
+
+export default function Settings({session,api,department,onDepartment,pickable,onLogout}){
  const role=session.role;
  return <section className="adm">
   <Account session={session}/>
@@ -80,5 +86,6 @@ export default function Settings({session,api,department,onDepartment,pickable})
   <Preferences departments={pickable} department={department} onDepartment={onDepartment}/>
   {(role==='DEPARTMENT_ADMIN'||role==='SYSTEM_ADMIN')&&<DepartmentAdmin departments={session.departments}/>}
   {role==='SYSTEM_ADMIN'&&<Organisations api={api}/>}
+  {onLogout&&<SignOut onLogout={onLogout}/>}
  </section>;
 }
