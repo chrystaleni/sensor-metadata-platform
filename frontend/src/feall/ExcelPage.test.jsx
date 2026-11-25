@@ -23,3 +23,8 @@ it('retains row-level validation errors and does not refresh on failure',async()
  fireEvent.click(screen.getByText('Import workbook'));
  await screen.findByText('Required.');expect(onImported).not.toHaveBeenCalled();
 });
+
+it('names the Department the workbook will be imported into',()=>{
+ vi.stubGlobal('fetch',vi.fn());render(<ExcelPage department="2" departmentName="Nicosia"/>);
+ expect(screen.getByRole('note')).toHaveTextContent('Records will be imported into Nicosia (Department ID 2)');
+});

@@ -24,6 +24,8 @@ validation, Department-ownership and uniqueness rule still applies.
 
 import re
 
+from django.apps import apps
+from django.conf import settings
 from rest_framework.utils import json
 
 from .access import get_access_policy
@@ -60,6 +62,11 @@ FIELD_TO_COLUMN = {
                      "data_collection_config": "DataCollectionType / DataCollectionParameters",
                      "customer_account": "Customer Account", "meter_account": "Meter Account"},
 }
+
+
+
+def department_model():
+    return apps.get_model(settings.METADATA_DEPARTMENT_MODEL)
 
 
 class ClientWorkbook(dict):
@@ -193,6 +200,21 @@ def resolve_client_records(raw, context, row_error, reject):
     request, platform_id = context["request"], context.get("platform_department_id")
     can_create = bool(platform_id) and get_access_policy().can_manage_controlled_lists(request)
     errors = []
+
+    # The Department column is informational, but a row that names a *different*
+    # existing Department was almost certainly meant for that one: stop before it
+    # lands in the Department chosen in the upload form. Unknown labels are ignored.
+    target = department_model().objects.filter(pk=context["department_id"]).values_list("name", flat=True).first()
+    known = {name.strip().lower() for name in department_model().objects.values_list("name", flat=True) if name}
+    for sheet in CLIENT_SHEETS:
+        for row, values in raw.get(sheet, []):
+            label = _text(values.get("Department"))
+            if label and target and label.lower() != target.strip().lower() and label.lower() in known:
+                errors.append(row_error(sheet, row, {"Department": [
+                    f"This row belongs to Department '{label}', but you are importing into '{target}'. "
+                    f"Select '{label}' and import again."]}))
+    if errors:
+        raise reject(errors)
 
     # Collect and clean every row first so problems are reported together.
     devices, elements, measurements = [], [], []
