@@ -273,3 +273,23 @@ def test_client_format_import_rejects_overlong_list_names(world):
     assert response.status_code == 400
     assert "MeasurementType" in response.json()["errors"][0]["errors"]
     assert not MeasurementType.objects.filter(name__startswith="xxx").exists()
+
+
+def test_form_fields_can_be_created_edited_and_cleared_through_the_api(world):
+    client, _ = login("EDITOR", [2])
+    created = client.post("/api/v1/network-elements/", {
+        "name": "Inlet", "department": 2, "element_type": world["element_type"],
+        "network_area": "Zone 1", "elevation": 120.5, "address": "1 Main St"}, format="json")
+    assert created.status_code == 201, created.data
+    assert (created.data["network_area"], created.data["elevation"], created.data["address"]) == ("Zone 1", 120.5, "1 Main St")
+    cleared = client.patch(f"/api/v1/network-elements/{created.data['id']}/",
+                           {"elevation": None, "network_area": "", "address": ""}, format="json")
+    assert cleared.status_code == 200, cleared.data
+    assert (cleared.data["elevation"], cleared.data["network_area"], cleared.data["address"]) == (None, "", "")
+    device = client.post("/api/v1/physical-devices/", {
+        "name": "Logger", "department": 2, "device_type": world["device_type"],
+        "communication_parameters": {"ip": "10.0.0.1", "port": 502}}, format="json")
+    assert device.status_code == 201, device.data
+    assert device.data["communication_parameters"] == {"ip": "10.0.0.1", "port": 502}
+    patched = client.patch(f"/api/v1/physical-devices/{device.data['id']}/", {"communication_parameters": None}, format="json")
+    assert patched.status_code == 200 and patched.data["communication_parameters"] is None
