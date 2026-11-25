@@ -34,7 +34,8 @@ it('lets System Administrators delete revoked and expired keys',async()=>{
  render(<ApiKeys department="7" allowed canDelete/>);
  expect(await screen.findByRole('button',{name:'Revoke Live'})).toBeInTheDocument();
  expect(screen.queryByRole('button',{name:'Delete Live'})).not.toBeInTheDocument();
- expect(screen.queryByRole('button',{name:'Revoke Old'})).not.toBeInTheDocument();
+ expect(screen.getByRole('button',{name:'Revoke Old'})).toBeInTheDocument(); // expired keys can still be revoked (Phase 2, Figure 44)
+ expect(screen.queryByRole('button',{name:'Revoke Gone'})).not.toBeInTheDocument();
  fireEvent.click(screen.getByRole('button',{name:'Delete Gone'}));
  await vi.waitFor(()=>expect(calls.some(c=>c.url.includes('/api-keys/2/purge/')&&c.method==='DELETE')).toBe(true));
  expect(screen.getByRole('button',{name:'Delete Old'})).toBeInTheDocument();
@@ -44,4 +45,19 @@ it('offers only Revoke to Department Administrators',async()=>{
  render(<ApiKeys department="7" allowed/>);
  await screen.findByRole('button',{name:'Revoke Live'});
  expect(screen.queryByRole('button',{name:/^Delete /})).not.toBeInTheDocument();
+});
+
+it('creates a key with no expiration and offers Revoke on expired keys',async()=>{
+ const past=new Date(Date.now()-86400000).toISOString();const calls=[];
+ vi.stubGlobal('fetch',vi.fn(async(url,options={})=>{calls.push({method:options.method||'GET',body:options.body});
+  return {ok:true,status:200,json:async()=>options.method==='POST'?{key:'smk_x'}:[{id:3,name:'Old',prefix:'c',expires_at:past,revoked_at:null},{id:4,name:'Forever',prefix:'d',expires_at:null,revoked_at:null}]}}));
+ render(<ApiKeys department="7" allowed/>);
+ expect(await screen.findByRole('button',{name:'Revoke Old'})).toBeInTheDocument();
+ expect(screen.getByText('Never')).toBeInTheDocument();
+ fireEvent.change(screen.getByLabelText('Key name'),{target:{value:'SCADA'}});
+ fireEvent.click(screen.getByLabelText('No expiration'));
+ expect(screen.getByLabelText('Expiration')).toBeDisabled();
+ fireEvent.submit(screen.getByLabelText('Key name').closest('form'));
+ await vi.waitFor(()=>expect(calls.some(c=>c.method==='POST')).toBe(true));
+ expect(JSON.parse(calls.find(c=>c.method==='POST').body)).toMatchObject({name:'SCADA',department:7,expires_at:null});
 });

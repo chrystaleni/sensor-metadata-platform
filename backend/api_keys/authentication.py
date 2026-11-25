@@ -31,7 +31,7 @@ class APIKeyAuthentication(BaseAuthentication):
         key = APIKey.objects.select_related("created_by", "department").filter(prefix=match[1]).first()
         if key is None or not hmac.compare_digest(key.digest, hashlib.sha256(raw.encode()).hexdigest()):
             raise InvalidAPIKey()
-        if key.revoked_at is not None or key.expires_at <= timezone.now() or key.created_by is None:
+        if key.revoked_at is not None or key.is_expired() or key.created_by is None:
             raise InvalidAPIKey()
         if not managed_departments(key.created_by).filter(pk=key.department_id).exists():
             raise InvalidAPIKey()

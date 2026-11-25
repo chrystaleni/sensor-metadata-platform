@@ -13,21 +13,22 @@ function status(row,now=Date.now()){
  return ['Active','ok'];
 }
 export default function ApiKeys({department,allowed,canDelete=false}){
- const [rows,setRows]=useState([]),[name,setName]=useState(''),[expires,setExpires]=useState('');
+ const [rows,setRows]=useState([]),[name,setName]=useState(''),[expires,setExpires]=useState(''),[never,setNever]=useState(false);
  const [raw,setRaw]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false),[copied,setCopied]=useState(false);
  const reload=useCallback(async()=>{const data=await fetchAllPages(api,'/api-keys/',{params:{department}});setRows(data);},[department]);
  useEffect(()=>{let live=true;const controller=new AbortController();if(allowed&&department)fetchAllPages(api,'/api-keys/',{params:{department},signal:controller.signal}).then(data=>{if(live)setRows(data)}).catch(e=>{if(live)setError(formatApiError(e))});return()=>{live=false;controller.abort()}},[allowed,department]);
- async function create(e){e.preventDefault();setBusy(true);setError('');setRaw('');setCopied(false);try{const data=await api('/api-keys/',{method:'POST',data:{name,department:Number(department),...(expires?{expires_at:new Date(expires).toISOString()}:{})}});setRaw(data.key);setName('');setExpires('');await reload();}catch(e){setError(formatApiError(e))}finally{setBusy(false)}}
+ async function create(e){e.preventDefault();setBusy(true);setError('');setRaw('');setCopied(false);try{const data=await api('/api-keys/',{method:'POST',data:{name,department:Number(department),...(never?{expires_at:null}:expires?{expires_at:new Date(expires).toISOString()}:{})}});setRaw(data.key);setName('');setExpires('');setNever(false);await reload();}catch(e){setError(formatApiError(e))}finally{setBusy(false)}}
  async function revoke(id){setError('');try{await api(`/api-keys/${id}/`,{method:'DELETE'});await reload()}catch(e){setError(formatApiError(e))}}
  async function purge(row){if(!window.confirm(`Delete ${row.name} from the list? This cannot be undone.`))return;setError('');try{await api(`/api-keys/${row.id}/purge/`,{method:'DELETE'});await reload()}catch(e){setError(formatApiError(e))}}
  async function copy(){try{await navigator.clipboard.writeText(raw);setCopied(true)}catch{setCopied(false)}}
  if(!allowed||!department)return <p>API key management requires a Department or System Administrator and an authorized Department.</p>;
  return <section className="adm">
   <div className="adm-card">
-   <div className="adm-head"><h2>Department API keys</h2><p>Read-only access to the selected Department. Keys expire after 90 days unless a different future expiration is specified.</p></div>
+   <div className="adm-head"><h2>Department API keys</h2><p>Read-only access to the selected Department. Keys expire after 90 days unless you choose another date or no expiration. Revoke a key to stop it at any time.</p></div>
    <form className="adm-form" onSubmit={create}>
     <label>Key name<input required maxLength="120" placeholder="e.g. SCADA integration" value={name} onChange={e=>setName(e.target.value)}/></label>
-    <label>Expiration<input type="datetime-local" value={expires} onChange={e=>setExpires(e.target.value)}/></label>
+    <label>Expiration<input type="datetime-local" value={expires} disabled={never} onChange={e=>setExpires(e.target.value)}/></label>
+    <label className="adm-check"><input type="checkbox" checked={never} onChange={e=>setNever(e.target.checked)}/> No expiration</label>
     <button className="adm-btn" disabled={busy}>Create API key</button>
    </form>
    {raw&&<div className="adm-secret" role="status"><p>Copy this key now. It will not be displayed again.</p><code>{raw}</code>
@@ -39,7 +40,7 @@ export default function ApiKeys({department,allowed,canDelete=false}){
     <tbody>{rows.map(row=>{const [label,tone]=status(row);return <tr key={row.id}>
      <td><strong>{row.name}</strong></td><td className="adm-mono">{row.prefix}</td>
      <td><span className={`adm-badge ${tone}`}>{label}</span></td><td>{when(row.expires_at)}</td>
-     <td className="actions">{label==='Active'&&<button className="adm-btn ghost danger" aria-label={`Revoke ${row.name}`} onClick={()=>revoke(row.id)}>Revoke</button>}{label!=='Active'&&canDelete&&<button className="adm-btn ghost danger" aria-label={`Delete ${row.name}`} onClick={()=>purge(row)}>Delete</button>}</td></tr>})}</tbody></table>
+     <td className="actions">{!row.revoked_at&&<button className="adm-btn ghost danger" aria-label={`Revoke ${row.name}`} onClick={()=>revoke(row.id)}>Revoke</button>}{label!=='Active'&&canDelete&&<button className="adm-btn ghost danger" aria-label={`Delete ${row.name}`} onClick={()=>purge(row)}>Delete</button>}</td></tr>})}</tbody></table>
     :<p className="adm-empty">No API keys for this Department yet.</p>}
   </div>
  </section>;
