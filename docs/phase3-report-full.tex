@@ -316,6 +316,81 @@ Django sessions, CSRF protection, and API keys \\
 \end{tabularx}
 \end{table}
 
+\subsection{Justification of Tool Selection}
+
+The Phase~1 analysis separates the technologies required by the client
+from those chosen by the team. Table~\ref{tab:phase3_tool_choice}
+records the choices and their justification.
+
+\begin{longtable}{P{3.4cm} P{3.2cm} P{8.5cm}}
+\caption{Tool Selection and Justification}
+\label{tab:phase3_tool_choice}\\
+
+\toprule
+\textbf{Tool} & \textbf{Origin} & \textbf{Justification} \\
+\midrule
+\endfirsthead
+
+\toprule
+\textbf{Tool} & \textbf{Origin} & \textbf{Justification} \\
+\midrule
+\endhead
+
+\bottomrule
+\endfoot
+
+PostgreSQL and PostGIS &
+Required by the client &
+Provides relational integrity for the metadata and spatial types and
+indexes for the geographical data. \\
+
+REST API and OpenAPI &
+Required by the client &
+External data collection systems read metadata through documented
+interfaces. \\
+
+Docker and Docker Compose &
+Required by the client &
+Provide a reproducible installation and persistent storage of the
+database. \\
+
+GitHub &
+Required by the client, which uses the KIOS-Research repository &
+Version control, issue tracking, pull requests, and continuous
+integration. \\
+
+Python and Django REST Framework &
+Python chosen by the team; Django requested by KIOS CoE &
+Python is an object-oriented language, as required by the course.
+Django provides models, migrations, authentication, and an
+administration-oriented structure, and Django REST Framework provides
+serializers and permissions for the API. \\
+
+React and Vite &
+Chosen by the team &
+Component-based interface for forms, tables, and the map, with fast
+development builds. \\
+
+Leaflet and MapLibre GL &
+Chosen by the team &
+Open-source map libraries that display the GeoJSON geometries and the
+Greek-labelled basemap requested by the client. \\
+
+pytest, Vitest, Playwright, ESLint &
+Chosen by the team &
+Automated backend, frontend, end-to-end, and static checks. \\
+
+GitHub Actions &
+Chosen by the team &
+Runs all checks on every push and pull request. \\
+
+AI assistants &
+Chosen by the team &
+Support analysis, design, coding, testing, and documentation. Their use
+is recorded in the AI Development Log. \\
+
+\end{longtable}
+
 \subsection{Backend Framework Decision}
 
 During Phase 2, FastAPI was selected as the backend
@@ -441,6 +516,79 @@ The Docker Compose configuration provides a local
 deployment environment. Additional security configuration
 would be required before exposing the application
 to the public internet.
+
+% =========================================================
+% SOURCE CODE ORGANISATION
+% =========================================================
+
+\section{Source Code Organisation}
+
+The source code is written in Python (backend) and JavaScript (frontend),
+using an object-oriented design in which the domain entities, the
+serializers, the access policies, and the services are classes.
+The repository structure is shown in Table~\ref{tab:phase3_structure}.
+
+\begin{longtable}{P{5.2cm} P{9.9cm}}
+\caption{Repository Structure}
+\label{tab:phase3_structure}\\
+
+\toprule
+\textbf{Location} & \textbf{Content} \\
+\midrule
+\endfirsthead
+
+\toprule
+\textbf{Location} & \textbf{Content} \\
+\midrule
+\endhead
+
+\bottomrule
+\endfoot
+
+\texttt{backend/metadata/} &
+Metadata domain: models, serializers, views, filters, controlled lists,
+Excel import (platform template and client workbook), and migrations. \\
+
+\texttt{backend/platform\_security/} &
+Roles, Department memberships, access policy, sessions, login
+throttling, and the user, Department, and Organisation APIs. \\
+
+\texttt{backend/api\_keys/} &
+API key model, authentication, and permissions. \\
+
+\texttt{backend/local\_departments/} &
+Organisation and Department models and migrations. \\
+
+\texttt{backend/core/}, \texttt{backend/config/} &
+Project configuration, URL routing, and OpenAPI documentation. \\
+
+\texttt{frontend/src/} &
+React application: layout, pages, forms, map, import and export,
+API keys, users, and settings, together with the unit tests. \\
+
+\texttt{frontend/e2e/} &
+Playwright end-to-end tests. \\
+
+\texttt{docker/}, \texttt{docker-compose.yml} &
+Container configuration and the nginx proxy. \\
+
+\texttt{scripts/} &
+Scripts for the isolated validation environment. \\
+
+\texttt{docs/} &
+Installation, API, session, migration, and testing documentation,
+sample workbooks, and the AI Development Log. \\
+
+\texttt{LICENSE} &
+MIT License. \\
+
+\end{longtable}
+
+The three metadata domains of the platform, physical devices, network
+elements, and measurements, are integrated through required relationships:
+every measurement references one physical device and one network element,
+and the shared controlled lists provide the types and units used by all
+of them.
 
 % =========================================================
 % 4. DEVIATIONS FROM PHASE 2
@@ -1585,6 +1733,121 @@ http://localhost:8080
 \end{lstlisting}
 
 % =========================================================
+% EXECUTION AND EVALUATION MATERIAL
+% =========================================================
+
+\section{Execution and Evaluation Material}
+
+\subsection{Provided Files}
+
+\begin{longtable}{P{5.6cm} P{9.5cm}}
+\caption{Files Supporting Execution and Evaluation}
+\label{tab:phase3_eval_files}\\
+
+\toprule
+\textbf{File} & \textbf{Purpose} \\
+\midrule
+\endfirsthead
+
+\toprule
+\textbf{File} & \textbf{Purpose} \\
+\midrule
+\endhead
+
+\bottomrule
+\endfoot
+
+\texttt{README.md} &
+Overview and setup instructions. \\
+
+\texttt{.env.example} &
+Example environment configuration; copied to \texttt{.env}. \\
+
+\texttt{docker-compose.yml} &
+Starts the database, backend, and frontend. \\
+
+\texttt{docs/development/phase3-integration.md} &
+Installation, configuration, roles, and API key guide. \\
+
+\texttt{scripts/validate\_disposable.sh} &
+Runs all validation checks in an isolated environment. \\
+
+\texttt{docs/testing/import-sample.xlsx} &
+Sample workbook in the platform's template format. \\
+
+\texttt{docs/testing/limassol-real-data.xlsx} &
+Sample workbook in the client's format. \\
+
+\texttt{seed\_demo\_data} command &
+Fills the database with demonstration data. \\
+
+\texttt{/api/v1/docs/} &
+Interactive API documentation. \\
+
+\end{longtable}
+
+\subsection{Main Configuration Settings}
+
+\begin{longtable}{P{6.4cm} P{8.7cm}}
+\caption{Main Configuration Settings}
+\label{tab:phase3_settings}\\
+
+\toprule
+\textbf{Setting} & \textbf{Purpose} \\
+\midrule
+\endfirsthead
+
+\toprule
+\textbf{Setting} & \textbf{Purpose} \\
+\midrule
+\endhead
+
+\bottomrule
+\endfoot
+
+\texttt{POSTGRES\_DB}, \texttt{POSTGRES\_USER}, \texttt{POSTGRES\_PASSWORD},
+\texttt{POSTGRES\_HOST}, \texttt{POSTGRES\_PORT} &
+Database connection. \\
+
+\texttt{DJANGO\_SECRET\_KEY} &
+Secret used by Django; unique for each installation. \\
+
+\texttt{METADATA\_PLATFORM\_DEPARTMENT\_ID} &
+Identifier of the Platform Department that owns the shared lists. \\
+
+\texttt{METADATA\_ACCESS\_POLICY} &
+Selects the Department-based access policy. \\
+
+\texttt{SESSION\_IDLE\_TIMEOUT\_SECONDS},
+\texttt{SESSION\_ABSOLUTE\_TIMEOUT\_SECONDS} &
+Session inactivity and maximum lifetime. \\
+
+\texttt{LOGIN\_FAILURE\_LIMIT},
+\texttt{LOGIN\_FAILURE\_WINDOW\_SECONDS} &
+Login attempt throttling. \\
+
+\end{longtable}
+
+\subsection{Evaluation Procedure}
+
+An evaluator can verify the application as follows:
+
+\begin{enumerate}
+    \item Start the services with Docker Compose and create a System
+    Administrator with \texttt{configure\_platform\_user}.
+    \item Load demonstration data with \texttt{seed\_demo\_data}, or import
+    one of the sample workbooks through the Import page.
+    \item Sign in at \texttt{http://localhost:8080} and review the Dashboard,
+    the tables and forms, and the map.
+    \item Create users with different roles and verify that Viewers cannot
+    modify data and that users cannot see other Departments.
+    \item Create an API key, and read data with the \texttt{X-API-Key} header.
+    \item Open \texttt{/api/v1/docs/} to inspect the API documentation.
+    \item Run the automated checks, or inspect the results of the GitHub
+    Actions workflow.
+\end{enumerate}
+
+% =========================================================
 % 11. TESTING AND VALIDATION
 % =========================================================
 
@@ -1603,7 +1866,7 @@ are outside the scope of this phase and are described in Phase~4.
 
 \subsection{Backend Testing}
 
-The backend test suite contains 591 pytest tests and 20 subtests.
+The backend test suite contains 592 pytest tests and 20 subtests.
 The tests execute against a PostgreSQL/PostGIS database.
 
 The covered areas include:
@@ -1620,7 +1883,7 @@ The covered areas include:
 
 \subsection{Frontend Testing}
 
-The frontend includes 89 unit and component tests in 18 test files,
+The frontend includes 94 unit and component tests in 18 test files,
 implemented using Vitest.
 In addition, ESLint is used for static analysis, and the production
 build is verified with Vite.
@@ -1651,11 +1914,11 @@ Table~\ref{tab:phase3_ci}.
 \midrule
 Backend tests &
 pytest, PostGIS &
-591 passed, 20 subtests passed \\
+592 passed, 20 subtests passed \\
 
 Frontend tests &
 Vitest &
-89 passed (18 files) \\
+94 passed (18 files) \\
 
 Static analysis and build &
 ESLint, Vite &
@@ -1829,8 +2092,8 @@ Documented as a known limitation. \\
 \toprule
 \textbf{Test Category} & \textbf{Tool} & \textbf{Result in CI} \\
 \midrule
-Backend tests & pytest & 591 passed \\
-Frontend unit tests & Vitest & 89 passed \\
+Backend tests & pytest & 592 passed \\
+Frontend unit tests & Vitest & 94 passed \\
 Static analysis & ESLint & Passed \\
 Production build & Vite & Passed \\
 End-to-end tests & Playwright & 3 passed \\
