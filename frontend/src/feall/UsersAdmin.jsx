@@ -14,7 +14,7 @@ export default function UsersAdmin({departments=[],role,allowed,currentUser}){
  const roles=role==='SYSTEM_ADMIN'?ALL_ROLES:ALL_ROLES.slice(0,2);
  const names=Object.fromEntries(departments.map(d=>[d.id,d.name]));
  const [rows,setRows]=useState([]),[form,setForm]=useState(blank),[error,setError]=useState(''),[busy,setBusy]=useState(false);
- const [reset,setReset]=useState(null),[copied,setCopied]=useState(false);
+ const [reset,setReset]=useState(null),[copied,setCopied]=useState(false),[editing,setEditing]=useState(null);
  const [tick,setTick]=useState(0);const reload=useCallback(()=>setTick(t=>t+1),[]);
  useEffect(()=>{if(!allowed)return;let live=true;const c=new AbortController();
   fetchAllPages(api,'/users/',{signal:c.signal}).then(data=>{if(live)setRows(data)}).catch(e=>{if(live&&e?.name!=='AbortError')setError(formatApiError(e))});
@@ -25,6 +25,11 @@ export default function UsersAdmin({departments=[],role,allowed,currentUser}){
   try{await api('/users/',{method:'POST',data:{...form,departments:form.departments.map(Number)}});setForm(blank);reload()}
   catch(err){setError(formatApiError(err))}finally{setBusy(false)}}
  async function deactivate(u){setError('');try{await api(`/users/${u.id}/`,{method:'DELETE'});reload()}catch(err){setError(formatApiError(err))}}
+ // Change a user's role and Departments. Department Administrators may only assign Viewer/Editor inside their
+ // own Departments; the server enforces this and keeps memberships outside the caller's Departments.
+ async function saveEdit(e){e.preventDefault();setEditing(x=>({...x,busy:true,error:''}));
+  try{await api(`/users/${editing.user.id}/`,{method:'PATCH',data:{role:editing.role,departments:editing.departments.map(Number)}});setEditing(null);reload()}
+  catch(err){const d=err?.details;setEditing(x=>({...x,busy:false,error:d&&typeof d==='object'?Object.values(d).flat().join(' '):formatApiError(err)}))}}
  // Reactivate and permanent delete: System Administrators only (also enforced by the server).
  async function reactivate(u){setError('');try{await api(`/users/${u.id}/reactivate/`,{method:'POST'});reload()}catch(err){setError(formatApiError(err))}}
  async function purge(u){if(!window.confirm(`Permanently delete ${u.username}? This cannot be undone. Records they created stay, without their name.`))return;setError('');try{await api(`/users/${u.id}/purge/`,{method:'DELETE'});reload()}catch(err){setError(formatApiError(err))}}
@@ -56,11 +61,21 @@ export default function UsersAdmin({departments=[],role,allowed,currentUser}){
      <td><strong>{u.username}</strong></td><td>{ROLE_NAME[u.role]||'No role'}</td>
      <td>{u.departments.map(id=>names[id]||`#${id}`).join(', ')||'None'}</td>
      <td><span className={`adm-badge ${u.is_active?'ok':'off'}`}>{u.is_active?'Active':'Inactive'}</span></td>
-     <td className="actions">{role==='SYSTEM_ADMIN'&&u.username!==currentUser&&<button className="adm-btn ghost" aria-label={`Reset password for ${u.username}`} onClick={()=>{setReset({user:u,current:'',password:'',busy:false,error:''});setCopied(false)}}>Reset password</button>}{u.is_active
+     <td className="actions">{u.username!==currentUser&&<button className="adm-btn ghost" aria-label={`Edit ${u.username}`} onClick={()=>setEditing({user:u,role:u.role||'VIEWER',departments:u.departments.map(String),busy:false,error:''})}>Edit</button>}{role==='SYSTEM_ADMIN'&&u.username!==currentUser&&<button className="adm-btn ghost" aria-label={`Reset password for ${u.username}`} onClick={()=>{setReset({user:u,current:'',password:'',busy:false,error:''});setCopied(false)}}>Reset password</button>}{u.is_active
       ?<button className="adm-btn ghost danger" aria-label={`Deactivate ${u.username}`} onClick={()=>deactivate(u)}>Deactivate</button>
       :role==='SYSTEM_ADMIN'&&<><button className="adm-btn ghost" aria-label={`Reactivate ${u.username}`} onClick={()=>reactivate(u)}>Reactivate</button><button className="adm-btn ghost danger" aria-label={`Delete ${u.username}`} onClick={()=>purge(u)}>Delete</button></>}</td></tr>)}</tbody></table>
     :<p className="adm-empty">No users to show.</p>}
   </div>
+  {editing&&<div className="all-overlay"><section className="all-dialog" role="dialog" aria-modal="true" aria-label={`Edit ${editing.user.username}`}>
+   <header><h2>Edit {editing.user.username}</h2><button type="button" onClick={()=>setEditing(null)} aria-label="Close">×</button></header>
+   <form style={{padding:16,display:'grid',gap:12}} onSubmit={saveEdit}>
+    <label>Role<select value={editing.role} onChange={e=>setEditing(x=>({...x,role:e.target.value}))}>{roles.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
+    <label>Departments<select multiple value={editing.departments} onChange={e=>setEditing(x=>({...x,departments:[...e.target.selectedOptions].map(o=>o.value)}))}>{departments.map(d=><option key={d.id} value={String(d.id)}>{d.organisation} / {d.name}</option>)}</select></label>
+    <p className="adm-hint">Hold Cmd or Ctrl to select several Departments.{role!=='SYSTEM_ADMIN'&&' Memberships in Departments you do not administer are kept.'}</p>
+    {editing.error&&<p className="adm-error" role="alert">{editing.error}</p>}
+    <footer><button type="button" className="all-secondary" onClick={()=>setEditing(null)}>Cancel</button><button className="all-primary" disabled={editing.busy}>{editing.busy?'Saving…':'Save'}</button></footer>
+   </form>
+  </section></div>}
   {reset&&<div className="all-overlay"><section className="all-dialog" role="dialog" aria-modal="true" aria-label={`Reset password for ${reset.user.username}`}>
    <header><h2>Reset password</h2><button type="button" onClick={closeReset} aria-label="Close">×</button></header>
    {reset.password

@@ -80,3 +80,26 @@ it('does not offer Reactivate or Delete to Department Administrators',async()=>{
  expect(screen.queryByRole('button',{name:'Reactivate old'})).not.toBeInTheDocument();
  expect(screen.queryByRole('button',{name:'Delete old'})).not.toBeInTheDocument();
 });
+
+it('edits a user role and Departments',async()=>{
+ const calls=[];vi.stubGlobal('fetch',vi.fn(async(url,options={})=>{calls.push({url:String(url),method:options.method||'GET',body:options.body});
+  return {ok:true,status:200,json:async()=>(options.method&&options.method!=='GET')?{}:[{id:3,username:'ann',role:'VIEWER',departments:[7],is_active:true},{id:4,username:'sam',role:'SYSTEM_ADMIN',departments:[],is_active:true}]}}));
+ render(<UsersAdmin departments={[...depts,{id:8,name:'South',organisation:'Water'}]} role="SYSTEM_ADMIN" allowed currentUser="sam"/>);
+ fireEvent.click(await screen.findByRole('button',{name:'Edit ann'}));
+ expect(screen.queryByRole('button',{name:'Edit sam'})).not.toBeInTheDocument();
+ const dialog=screen.getByRole('dialog',{name:'Edit ann'});
+ fireEvent.change(dialog.querySelector('select'),{target:{value:'EDITOR'}});
+ const multi=dialog.querySelectorAll('select')[1];[...multi.options].forEach(o=>{o.selected=true});fireEvent.change(multi);
+ fireEvent.submit(dialog.querySelector('form'));
+ await vi.waitFor(()=>expect(calls.some(c=>c.method==='PATCH')).toBe(true));
+ const patch=calls.find(c=>c.method==='PATCH');
+ expect(patch.url.endsWith('/users/3/')).toBe(true);
+ expect(JSON.parse(patch.body)).toEqual({role:'EDITOR',departments:[7,8]});
+});
+it('offers Department Administrators only Viewer and Editor when editing',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async()=>({ok:true,status:200,json:async()=>[{id:3,username:'ann',role:'VIEWER',departments:[7],is_active:true}]})));
+ render(<UsersAdmin departments={depts} role="DEPARTMENT_ADMIN" allowed currentUser="dee"/>);
+ fireEvent.click(await screen.findByRole('button',{name:'Edit ann'}));
+ const options=[...screen.getByRole('dialog',{name:'Edit ann'}).querySelector('select').options].map(o=>o.value);
+ expect(options).toEqual(['VIEWER','EDITOR']);
+});
