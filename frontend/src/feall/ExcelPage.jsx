@@ -2,7 +2,7 @@ import {useRef,useState} from 'react';
 import {messageOf,groupedImportErrors} from './excelErrors';
 import {csrfToken,createImportRequest,importSucceeded} from './excelImport';
 
-export default function ExcelPage({department,canWrite=true,onImported=()=>{}}){
+export default function ExcelPage({department,departmentName,canWrite=true,onImported=()=>{}}){
  const [file,setFile]=useState(null),[typedDepartment,setDepartmentId]=useState(''),[state,setState]=useState('idle');
  const [error,setError]=useState(''),[report,setReport]=useState(null);
  const fileInput=useRef(null);
@@ -39,6 +39,7 @@ export default function ExcelPage({department,canWrite=true,onImported=()=>{}}){
   <div className="all-pad">
    {!configured&&<p role="status">Excel import is temporarily unavailable until the backend import API is connected.</p>}
    {!canWrite&&<p role="status">Import requires write permission for the selected Department.</p>}
+   {departmentName&&<p role="note" className="all-import-target">Records will be imported into <strong>{departmentName}</strong> (Department ID {departmentId}). To import into another Department, switch it from the profile menu first.</p>}
    <label>Department ID <input readOnly={department!==undefined} type="number" min="1" step="1" value={departmentId} onChange={e=>setDepartmentId(e.target.value)} disabled={!configured||!canWrite||state==='loading'}/></label>
    <label className="all-upload">Select Excel workbook (.xlsx)
     <input ref={fileInput} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={choose} disabled={!configured||!canWrite||state==='loading'}/>
