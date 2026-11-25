@@ -52,9 +52,12 @@ export async function loadGreekMapStyle() {
         countryExpression()
       ];
     } else {
+      // Greek, then English, never the local name (which is Turkish in the occupied area).
+      // Only the explicit name:en tag: the tiles' name_en falls back to the local name.
       layer.layout['text-field'] = [
         'coalesce',
         ['get', 'name:el'],
+        ['get', 'name:en'],
         ''
       ];
     }
